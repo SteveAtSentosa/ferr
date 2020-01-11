@@ -1,0 +1,37 @@
+{
+  "name": "ferr",
+  "version": "1.0.0",
+  "description": "Expressive error handling with a functional focus",
+  "note": "created based on https://itnext.io/step-by-step-building-and-publishing-an-npm-typescript-package-44fe7164964c",
+  "main": "lib/ferr.js",
+  "types": "lib/ferr.d.ts",
+  "keywords": ["error", "errors" ],
+  "files": [
+    "lib/**/*"
+  ],
+  "repository": "git@github.com:SteveAtSentosa/ferr.git",
+  "author": "Steven Saunders <steve.saunders@technicity.io>",
+  "license": "MIT",
+  "private": false,
+  "devDependencies": {
+    "@types/jest": "^24.0.25",
+    "@types/node": "^13.1.6",
+    "jest": "^24.9.0",
+    "prettier": "^1.19.1",
+    "rimraf": "^3.0.0",
+    "ts-jest": "^24.3.0",
+    "tslint": "^5.20.1",
+    "tslint-config-prettier": "^1.18.0",
+    "typescript": "^3.7.4"
+  },
+  "scripts": {
+    "test": "jest --config jestconfig.json ./src/__tests__",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
+    "lint": "tslint -p tsconfig.json",
+    "clean": "rimraf ./lib",
+    "build": "yarn clean && tsc",
+    "prepare" : "yarn build",
+    "prepublishOnly" : "yarn test && yarn lint",
+    "preversion" : "yarn lint"
+  }
+}
