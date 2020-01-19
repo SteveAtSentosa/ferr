@@ -2,10 +2,8 @@
   "name": "ferr",
   "version": "1.0.0",
   "description": "Expressive error handling with a functional focus",
-  "note": "created based on https://itnext.io/step-by-step-building-and-publishing-an-npm-typescript-package-44fe7164964c",
   "main": "lib/ferr.js",
-  "types": "lib/ferr.d.ts",
-  "keywords": ["error", "errors" ],
+  "keywords": ["error", "errors", "functional" ],
   "files": [
     "lib/**/*"
   ],
@@ -13,25 +11,32 @@
   "author": "Steven Saunders <steve.saunders@technicity.io>",
   "license": "MIT",
   "private": false,
+  "dependencies": {
+    "ramda": "^0.26.1",
+    "ramda-adjunct": "^2.23.0"
+  },
   "devDependencies": {
-    "@types/jest": "^24.0.25",
-    "@types/node": "^13.1.6",
-    "jest": "^24.9.0",
-    "prettier": "^1.19.1",
-    "rimraf": "^3.0.0",
-    "ts-jest": "^24.3.0",
-    "tslint": "^5.20.1",
-    "tslint-config-prettier": "^1.18.0",
-    "typescript": "^3.7.4"
+    "@babel/cli": "^7.8.3",
+    "@babel/core": "^7.8.3",
+    "@babel/node": "^7.8.3",
+    "@babel/preset-env": "^7.8.3",
+    "@babel/register": "^7.8.3",
+    "chai": "^4.2.0",
+    "eslint": "^6.8.0",
+    "eslint-config-standard": "^14.1.0",
+    "eslint-plugin-import": "^2.20.0",
+    "eslint-plugin-mocha": "^6.2.2",
+    "eslint-plugin-node": "^11.0.0",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-standard": "^4.0.1",
+    "mocha": "^7.0.0",
+    "onchange": "^6.1.0",
+    "rimraf": "^3.0.0"
   },
   "scripts": {
-    "test": "jest --config jestconfig.json ./src/__tests__",
-    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
-    "lint": "tslint -p tsconfig.json",
-    "clean": "rimraf ./lib",
-    "build": "yarn clean && tsc",
-    "prepare" : "yarn build",
-    "prepublishOnly" : "yarn test && yarn lint",
-    "preversion" : "yarn lint"
+    "clean": "rimraf lib",
+    "build": "yarn clean && cross-env BABEL_ENV=cjs babel src --out-dir lib",
+    "test": "mocha --r ./.register.babel.js",
+    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test"
   }
 }
