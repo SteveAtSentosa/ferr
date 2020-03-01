@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "Expressive error handling with a functional focus",
   "main": "lib/ferr.js",
-  "keywords": ["error", "errors", "functional" ],
+  "keywords": [
+    "error",
+    "errors",
+    "functional"
+  ],
   "files": [
     "lib/**/*"
   ],
@@ -21,6 +25,7 @@
     "@babel/node": "^7.8.3",
     "@babel/preset-env": "^7.8.3",
     "@babel/register": "^7.8.3",
+    "babel-node": "^0.0.1-security",
     "chai": "^4.2.0",
     "eslint": "^6.8.0",
     "eslint-config-standard": "^14.1.0",
@@ -37,6 +42,7 @@
     "clean": "rimraf lib",
     "build": "yarn clean && cross-env BABEL_ENV=cjs babel src --out-dir lib",
     "test": "mocha --r ./.register.babel.js",
+    "viz": "babel-node vizualize/vizualize.errorMessages.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test"
   }
 }
