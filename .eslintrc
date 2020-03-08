@@ -20,6 +20,7 @@
     "object-property-newline": 0,
     "import/no-duplicates": 0,
     "no-unused-expressions": 0,
+    "curly": 0,
     "indent": [
       "error",
       2,

@@ -1,160 +1,87 @@
-import { concat, curry, propOr, prop, propEq, propSatisfies, complement, omit, has } from 'ramda'
-import { isObject, isString, isNotNil, isNilOrEmpty, isNotNilOrEmpty, isNotObject, isNotString } from 'ramda-adjunct'
-import { flatArrayify, stackStrToArr, tab, msgListToStr, propIsNilOrEmpty, propIsNotNilOrEmpty } from './utils'
+import { concat, curry, propOr } from 'ramda'
+import { isObject, isString, isNotObject } from 'ramda-adjunct'
+import {
+  flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr, isNotObjectOrNonEmptyString
+} from './utils'
+import {
+  _tagFErr, _defaultErrMsg, isNotFerr,
+  errInfoToFerr, setCallStack,
+  hasOp, getOp, setOp, hasCode, getCode, setCode, hasMsg, getMsg, setMsg,
+  hasClientMsg, getClientMsg, setClientMsg, hasNotes, getNotes, getNotesOrDef, setNotes,
+  hasExternalExp, doesNotHaveExternalExp, getExternalExp, setExternalExp,
+} from './ferrAccess'
 
-const _tag = '@@ferr'
-const _defaultErrMsg = 'unkown error'
-
-const isErrInfo = toCheck =>
-  isObject(toCheck) && isString(propOr(null, 'msg', toCheck))
-
-const isFerr = toCheck => isObject(toCheck) && propEq('_tag', _tag, toCheck)
-const isNotFerr = complement(isFerr)
-
-// Building upon Error class to take advantage of automatic stack generation,
-// and because some 3rd party libraries (i.e Jest) assume exceptions are of type Error
-// This is the only place in the code where we do any OO like stuff
-//
-
-// TODO: add ability to construct from errInfo or fErr
-// esp fErr, cause would be nice to be able to return new fErr based on old rather thatn mutating
-class FErr extends Error {
-  constructor(message) {
-    const msg = message || _defaultErrMsg
-    super(msg)
-    this._tag = _tag
-    this.msg = msg
-    this.op = ''
-    this.code = ''
-    this.clientMsg = ''
-    this.notes = []
-    this.callStack = []
-    this.externalExp = null
-  }
+// create an fErr given fErrInfo
+// {errInfo} | 'msg' -> fErr
+export const makeErr = (errInfo = _defaultErrMsg)  => {
+  const fErr = errInfoToFerr(isString(errInfo) ? { msg: errInfo } : errInfo)
+  return setCallStack(stackStrToStackArr((new Error()).stack), fErr)
 }
 
-//
-// return an Error object given with the additional props in errInfo added, and message set to msg
-// errInfo {
-//   op: 'operation'
-//   code: 'error code string'
-//   msg: 'error message'
-//   clientMsg: 'message for clients to display'
-//   notes: ['notes', 'about', 'the', 'error']
-// }
-// if isString(errInfo), then errInfo is assumed to be 'msg' (i.e. an error message)
-// {} | '' => FErr
-//
-export const makeErr = (errInfo = {})  => {
-  const msg =
-    isString(errInfo) ? errInfo :
-    propSatisfies(isString, 'msg', errInfo) ? errInfo.msg : _defaultErrMsg
-
-  const fErr = new FErr(msg)
-  fErr.msg = msg
-  fErr.callStack = stackStrToArr(fErr.stack)
-  if (isErrInfo(errInfo)) {
-    fErr.op = propOr('', 'op', errInfo)
-    fErr.code = propOr('', 'code', errInfo)
-    fErr.clientMsg = propOr('', 'clientMsg', errInfo)
-    fErr.notes = propOr([], 'notes', errInfo)
-    fErr.externalExp = propOr(null, 'externalExp', errInfo)
-  }
-  return fErr
-}
-
-//
-// Add a single note, or list of notes to an fErr
-// Return the original fErr object
+// Return an fErr derived from original fErr, with notes added
 // '' | [''] -> fErr -> fErr
-//
 export const addNote = curry((noteOrNoteList, fErr) => {
-  fErr.notes = concat(fErr.notes, flatArrayify(noteOrNoteList))
-  return fErr
+  const newNoteList = concat(getNotesOrDef(fErr), flatArrayify(noteOrNoteList))
+  return setNotes(newNoteList, fErr)
 })
 
-export const throwErr = errInfo => { throw makeErr(errInfo) }
+// TODO: can I losen this up and allow it to interchanably merge errInfo and fErr objects?
+// given an existing fErr and additional error info, merge into and return a new fErr
+export const mergeErrInfo = (existingFerr, newErrInfo) => {
 
-export const throwErrIf = (condition, errInfo) => {
-  if (condition) throwErr(errInfo)
-}
+  if (isNotFerr(existingFerr)) return makeErr(newErrInfo)
+  if (isNotObjectOrNonEmptyString(newErrInfo)) return existingFerr
 
-const msgIsEmptyOrDefault = fErrOrErrInfo => {
-  if (isNotObject(fErrOrErrInfo)) return true
-  const msg = propOr(null, 'msg', fErrOrErrInfo)
-  return isNotString(msg) || msg.length === 0 || msg === _defaultErrMsg
-}
+  let noteStr = ''
+  const sourceErrInfo = isString(newErrInfo) ? { msg: newErrInfo } : newErrInfo
+  let targetFerr = existingFerr
 
-const msgIsNotEmptyOrDefault = complement(msgIsEmptyOrDefault)
+  // copy over code, op, msg if missing, or add to notes if not
 
-// TODO: make this non mutating (need to figure out how to cloine classes)
-// given an existing error, and info about a new error,
-// return an error that reasonably merged information from both
-// ({fErr}, {errInfo}) -> {fErr}
-const mergeErrorInfo = (existingErr, newErrInfo) => {
-  if (isNotFerr(existingErr)) return makeErr(newErrInfo)
-  if (isNotObject(newErrInfo)) return existingErr
-
-  let errInfoForNotes = newErrInfo
-
-  if (msgIsEmptyOrDefault(existingErr) && msgIsNotEmptyOrDefault(newErrInfo)) {
-    existingErr.msg = prop('msg', newErrInfo)
-    errInfoForNotes = omit('msg', errInfoForNotes)
+  if (hasCode(sourceErrInfo)) {
+    if (hasCode(targetFerr))
+      noteStr += `Code: ${getCode(sourceErrInfo)}`
+    else
+      targetFerr = setCode(getCode(sourceErrInfo), targetFerr)
   }
 
-  // TODO: write a transferPropIfNeeded, which returns new resulting objects w/o mutating original
-  if (propIsNilOrEmpty('op', existingErr) && propIsNotNilOrEmpty('op', newErrInfo)) {
-    existingErr.msg = prop('op', newErrInfo)
-    errInfoForNotes = omit('op', errInfoForNotes)
+  if (hasOp(sourceErrInfo)) {
+    if (hasOp(targetFerr))
+      noteStr += `, ${getOp(sourceErrInfo)}`
+    else
+      targetFerr = setOp(getOp(sourceErrInfo), targetFerr)
   }
 
-  if (propIsNilOrEmpty('clientMsg', existingErr) && propIsNotNilOrEmpty('clientMsg', newErrInfo)) {
-    existingErr.msg = prop('clientMsg', newErrInfo)
-    errInfoForNotes = omit('clientMsg', errInfoForNotes)
+
+  if (hasMsg(sourceErrInfo)) {
+    if (hasMsg(targetFerr) && getMsg(targetFerr) !== _defaultErrMsg)
+      noteStr += ` => ${getMsg(sourceErrInfo)}`
+    else
+      targetFerr = setMsg(getMsg(sourceErrInfo), targetFerr)
   }
 
-  return addNote(fErrToMsgList(errInfoForNotes, '    '))
+  // add note string for anything that was not coppied over
+  if (noteStr)
+    targetFerr = addNote(noteStr, targetFerr)
+
+  // copy over clientMsg if missing, or add to notes if not
+  if (hasClientMsg(sourceErrInfo)) {
+    targetFerr = hasClientMsg(targetFerr) ?
+      addNote(getClientMsg(sourceErrInfo), targetFerr) :
+      setClientMsg(getClientMsg(sourceErrInfo), targetFerr)
+  }
+
+  // append any incoming notes
+  if (hasNotes(sourceErrInfo))
+    targetFerr = addNote(getNotes(sourceErrInfo), targetFerr)
+
+  // grap the external exception if we don't already have one
+  if (hasExternalExp(sourceErrInfo) && doesNotHaveExternalExp(targetFerr))
+    targetFerr = setExternalExp(getExternalExp(sourceErrInfo), targetFerr)
+
+  return targetFerr
 }
 
-
-export const throwWith = (existingErr, newErrInfo) => {
-  // if (isNotFerr(existingErr)) return makeErr
-
-  /*
-
-  If existingErr.msg == default && newErrorInfo.msg != Nill && != defaul: existingErr.msg = newErrInfo.msg
-
-  */
-
-
-  //   op: 'operation'
-  //   code: 'error code string'
-  //   msg: 'error message'
-  //   clientMsg: 'message for clients to display'
-  //   notes: ['notes', 'about', 'the', 'error']
-
-  // if exsiting error was externally generated, make new fErr which includes it
-  if (isNotFerr(existingErr) && propSatisfies(isNotNil, 'externalExp', newErrInfo)) {
-    throwErr({ ...newErrInfo, externalExp: existingErr })
-
-  // ifexistingErr is an fErr, then add new error info as a note
-  } else {
-    // addNote
-  }
-
-  /*
-  if exiting error is not FERR
-    create a new FErr, and pass in existin error
-  else
-    construct string from newErrorInfo, and add as a note to incoming fErr
-  */
-
-
-}
-
-
-// also takes errInfo
-// TODO: think about a way for fErr and errInfo to be somewhat interchangable?
 const fErrToMsgList = (fErr, tabStr='') => {
   if (isNotObject(fErr)) return []
   const {
@@ -162,7 +89,7 @@ const fErrToMsgList = (fErr, tabStr='') => {
   } = fErr
 
   const msgList = ['\nERROR encountered!']
-  msgList.push(tab(`Msg: ${op ? op+': ' : ''}${msg}`))
+  msgList.push(tab(`Msg: ${op ? op+' => ' : ''}${msg}`))
   if (clientMsg) msgList.push(tab(`Client msg: ${clientMsg}`))
   if (code) msgList.push(tab(`Code: ${code}`))
   if (notes.length > 0) {
@@ -190,13 +117,19 @@ const fErrToMsgList = (fErr, tabStr='') => {
 
 export const fErrStr = fErr => isObject(fErr) ? msgListToStr(fErrToMsgList(fErr)) : ''
 
+
+export const throwErr = errInfo => { throw makeErr(errInfo) }
+
+export const throwErrIf = (condition, errInfo) => {
+  if (condition) throwErr(errInfo)
+}
+
+export const throwWith = (existingErr, newErrInfo) => {
+}
+
 // functions that we want to expose to testing, but not to end clients
 export const testExports = {
+  _tagFErr,
   _defaultErrMsg,
-  FErr,
-  isErrInfo,
-  msgIsEmptyOrDefault,
-  msgIsNotEmptyOrDefault,
   fErrToMsgList,
-  mergeErrorInfo
 }

@@ -2758,10 +2758,28 @@ punycode@^2.1.0:
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.1.1.tgz#b58b010ac40c22c5657616c8d2c2c02c7bf479ec"
   integrity sha512-XRsRjdf+j5ml+y/6GKHPZbrF/8p2Yga0JPtdqTIY2Xe5ohJPD9saDJJLPvp9+NSBprVvevdXZybnj2cv8OEd0A==
 
+ramda-adjunct@^2.2.0:
+  version "2.25.0"
+  resolved "https://registry.yarnpkg.com/ramda-adjunct/-/ramda-adjunct-2.25.0.tgz#bce71ac6de57d246c3947b2d79c8bc8e6f2ce27d"
+  integrity sha512-N4e0dUgoCMjiGmElZYr3sbwg75nPVIhu10jXot3nY30okFd4+4HWI5UF2+l5xsu8ygSn4Ez3LwakcK1ejJWVHw==
+
 ramda-adjunct@^2.23.0:
   version "2.24.0"
   resolved "https://registry.yarnpkg.com/ramda-adjunct/-/ramda-adjunct-2.24.0.tgz#aa278553ac66d44799c2cb873a2f40910c7807ac"
   integrity sha512-iy+jMKVbgfPXN3eheXTLS/ebe8nE3s38mtXMbx5pdB0VhOjRl92lQoK6VEZf5Cu0UBGNkQSonMHiDaCGraRASQ==
+
+ramda-lens-groups@^1.2.3:
+  version "1.2.3"
+  resolved "https://registry.yarnpkg.com/ramda-lens-groups/-/ramda-lens-groups-1.2.3.tgz#2862765de40a82f52c412a237354bf037c143d57"
+  integrity sha512-3OcYRgfFC6HnjAEH2K5pWfbyxu1cir2RSjVy1ygZzHblxtkMmWnP31g/qwyWbfyZ/xrCDXscExIUcfPoyZJuAQ==
+  dependencies:
+    ramda "^0.25.0"
+    ramda-adjunct "^2.2.0"
+
+ramda@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.yarnpkg.com/ramda/-/ramda-0.25.0.tgz#8fdf68231cffa90bc2f9460390a0cb74a29b29a9"
+  integrity sha512-GXpfrYVPwx3K7RQ6aYT8KPS8XViSXUVJT1ONhoKPE9VAleW42YE+U+8VEyGWt41EnEQW7gwecYJriTI0pKoecQ==
 
 ramda@^0.26.1:
   version "0.26.1"

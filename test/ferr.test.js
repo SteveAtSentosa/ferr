@@ -1,82 +1,156 @@
-import { omit, assoc, keysIn, keys } from 'ramda'
+import { omit, assoc, keysIn, keys, fromPairs } from 'ramda'
 import { expect } from 'chai'
-import { addNote, makeErr, testExports } from '../src/ferr'
+import { addNote, makeErr, mergeErrInfo, testExports } from '../src/ferr'
 import {
-  plainObject, doesNotHave, addPropIfMissing, addPropIfMissingOrEq, propIsNilOrEmpty, addPropIfNillOrEmpty
+  _tagFErr, _defaultErrMsg, isFerr, isNotFerr,
+  errInfoToFerr, setCallStack,
+  hasOp, getOp, setOp, hasCode, getCode, setCode, hasMsg, getMsg, setMsg,
+  hasClientMsg, getClientMsg, setClientMsg, hasNotes, getNotes, getNotesOrDef, setNotes,
+  hasExternalExp, doesNotHaveExternalExp, getExternalExp, setExternalExp,
+} from '../src/ferrAccess'
+import {
+  plainObject, doesNotHave, addPropIfMissing, addPropIfMissingOrEq,
+  propIsNilOrEmpty, addPropIfNillOrEmpty, stackStrToArr, stackArrToStr, arrayify, flatArrayify,
+  isNonEmptyString, propIsNonEmptyString, isNonEmptyArray, propIsNonEmptyArray, propIsNotNil, isNotObjectOrNonEmptyString
 } from '../src/utils'
 
-const { _defaultErrMsg, msgIsEmptyOrDefault, msgIsNotEmptyOrDefault, isErrInfo, mergeErrorInfo, FErr  } = testExports
+import {
+  fErrDefaults, fErrDefult, externalExp,
+  fErrWithMsg, fErrWithOp, fErrWithCode, fErrWithClientMsg, fErrWithNotes, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
 
-let externalExp
-try { throw Error('external-exception') } catch (e) { externalExp = e }
-const emptyErr = makeErr({ msg: 'empty-err' })
-const omitStack = omit(['stack', 'callStack'])
+  incomingObjWithOp, incomingObjWithCode, incomingObjWithMsg, incomingObjWithClientMsg, incomingObjWithNotes, incomingObjWithAll,
+  testOpObj, testCodeObj, testMsgObj, testClientMsgObj, testNotesObj, incomingObjWithExternaExp, incomingObjWithCodeAndOpAndMsg,
+  testOpFerr, testCodeFerr, testMsgFerr, testClientMsgFerr, testNotesFerr,
+} from './testData'
+
+const {
+  mergePropToObjOrStr, msgIsEmptyOrDefault, msgIsNotEmptyOrDefault, isErrInfo, mergeErrorInfo, FErr
+} = testExports
 
 const runFerrTests = () => {
   describe('server tests', () => {
-    testTypes()
     testUtils()
+    testTypes()
+    testAccess()
     testErrorCreation()
     testErrorNotes()
     testErrorMerging()
   })
 }
 
-const testTypes = () =>
-  it('should detect fErr types correctly', () => {
-    expect(isErrInfo({ msg: 'yo' })).to.be.true
-    expect(isErrInfo({ msg: 'yo', code: 'HO' })).to.be.true
-    expect(isErrInfo('yo')).to.be.false
-    expect(isErrInfo({})).to.be.false
-  })
+// let externalExp
+// try { throw Error('external-exception') } catch (e) { externalExp = e }
+
+const omitCallStack = omit(['callStack'])
 
 const testUtils = () => {
-  it('should detect empty or default errInfo msg', () => {
-    expect(msgIsEmptyOrDefault({})).to.be.true
-    expect(msgIsNotEmptyOrDefault({})).to.be.false
-    expect(msgIsEmptyOrDefault({ msg: _defaultErrMsg })).to.be.true
-    expect(msgIsNotEmptyOrDefault({ msg: _defaultErrMsg })).to.be.false
-    expect(msgIsEmptyOrDefault({ msg: '' })).to.be.true
-    expect(msgIsNotEmptyOrDefault({ msg: '' })).to.be.false
-    expect(msgIsEmptyOrDefault({ msg: 'hi' })).to.be.false
-    expect(msgIsNotEmptyOrDefault({ msg: 'hi' })).to.be.true
+  it('should arrayify correctly', () => {
+    expect(arrayify(['a'])).to.deep.equal(['a'])
+    expect(arrayify('a')).to.deep.equal(['a'])
+    expect(flatArrayify(['a'])).to.deep.equal(['a'])
+    expect(flatArrayify('a')).to.deep.equal(['a'])
+    expect(flatArrayify([['a']])).to.deep.equal(['a'])
   })
 
-  it('should detect missing props', () => {
-    expect(doesNotHave('missing', { someProp : 'someProp' })).to.be.true
-    expect(doesNotHave('someProp', { someProp : 'someProp' })).to.be.false
+  it('should detect missing props correctly', () => {
+    expect(doesNotHave('a', { a: 'a' })).to.be.false
+    expect(doesNotHave('b', { a: 'a' })).to.be.true
   })
 
-  it('should detect nil or empty props', () => {
-    expect(propIsNilOrEmpty('p', { p: undefined })).to.be.true
-    expect(propIsNilOrEmpty('p', { p: null })).to.be.true
-    expect(propIsNilOrEmpty('p', { p: '' })).to.be.true
-    expect(propIsNilOrEmpty('p', { p: [] })).to.be.true
-    expect(propIsNilOrEmpty('p', { p: {} })).to.be.true
-    expect(propIsNilOrEmpty('p', undefined)).to.be.true
-    expect(propIsNilOrEmpty('p', { p: 'p' })).to.be.false
+  it('should detect non empty strings correctly', () => {
+    expect(isNonEmptyString('a')).to.be.true
+    expect(isNonEmptyString('')).to.be.false
+    expect(isNonEmptyString({})).to.be.false
+    expect(isNonEmptyString([])).to.be.false
+    expect(propIsNonEmptyString('a', { a: 'a' })).to.be.true
+    expect(propIsNonEmptyString('a', { a: '' })).to.be.false
+    expect(propIsNonEmptyString('b', { a: 'a' })).to.be.false
+    expect(propIsNonEmptyString('a', { a: {} })).to.be.false
+    expect(propIsNonEmptyString('a', { a: [] })).to.be.false
+  })
+
+  it('should detect non empty arrays correctly', () => {
+    expect(isNonEmptyArray(['a'])).to.be.true
+    expect(isNonEmptyArray([])).to.be.false
+    expect(isNonEmptyArray({})).to.be.false
+    expect(propIsNonEmptyArray('a', { a: ['a'] })).to.be.true
+    expect(propIsNonEmptyArray('a', { a: [] })).to.be.false
+    expect(propIsNonEmptyArray('a', { a: 'a' })).to.be.false
+    expect(propIsNonEmptyArray('b', { a: ['a'] })).to.be.false
+  })
+
+  it('should detect non nill props correctly', () => {
+    expect(propIsNotNil('a', { a: 'a' })).to.be.true
+    expect(propIsNotNil('b', { a: 'a' })).to.be.false
+    expect(propIsNotNil('a', { a: undefined })).to.be.false
+    expect(propIsNotNil('a', { a: null })).to.be.false
+  })
+
+  it('should detect non object/strings correctly', () => {
+    expect(isNotObjectOrNonEmptyString({})).to.be.false
+    expect(isNotObjectOrNonEmptyString('abc')).to.be.false
+    expect(isNotObjectOrNonEmptyString(1)).to.be.true
+    expect(isNotObjectOrNonEmptyString('')).to.be.true
+  })
+
+
+  it('should handle stack conversions properly', () => {
+    const errMsg = 'stack test msg'
+    const testError = new Error(errMsg)
+    const stackArr = stackStrToArr(testError.stack)
+    const reconstructedStackStr = stackArrToStr(errMsg, stackArr)
+    expect(reconstructedStackStr).to.equal(testError.stack)
   })
 }
+
+const testTypes = () => {
+  it('should detect fErr types correctly', () => {
+    expect(isFerr(makeErr())).to.be.true
+    expect(isFerr(makeErr('dude'))).to.be.true
+    expect(isFerr({ msg: 'dude' })).to.be.false
+    expect(isFerr('msg')).to.be.false
+    expect(isFerr(['msg'])).to.be.false
+    expect(isNotFerr(makeErr())).to.be.false
+    expect(isNotFerr(makeErr('dude'))).to.be.false
+    expect(isNotFerr({ msg: 'dude' })).to.be.true
+    expect(isNotFerr('msg')).to.be.true
+    expect(isNotFerr(['msg'])).to.be.true
+  })
+}
+
+const testAccess = () => {
+  it('should access fErr props correctly', () => {
+    // TODO: build these tests out
+    expect(hasOp(testOpObj)).to.be.true
+    expect(hasOp({})).to.be.false
+  })
+}
+
 
 const testErrorCreation = () =>
   it('should make errors correctly', async () => {
 
+    // test no error info given
+    const fErrNoInfo = makeErr()
+    expect(fErrNoInfo.callStack).to.be.an.instanceof(Array)
+    expect(omitCallStack(fErrNoInfo)).to.deep.equal(fErrDefaults)
+
     // test only string given
-    expect(makeErr('test-error')).to.be.an.instanceof(FErr)
-    expect(omitStack(makeErr('test-error'))).to.deep.equal(omitStack(makeErr({ ...emptyErr, msg: 'test-error' })))
-    expect(omitStack(plainObject(makeErr('test-error')))).to.deep.equal(omitStack({ ...emptyErr, msg: 'test-error' }))
+    const fErrFromString = makeErr('test-error')
+    expect(fErrFromString.callStack).to.be.an.instanceof(Array)
+    expect(omitCallStack(fErrFromString)).to.deep.equal({ ...fErrDefaults, msg: 'test-error' })
 
     // test partial error info given
-    const partialErr = { op: 'partial-op', msg: 'partial-msg', externalExp, }
-    expect(makeErr(partialErr)).to.be.an.instanceof(FErr)
-    expect(omitStack(makeErr(partialErr))).to.deep.equal(omitStack(makeErr({ ...emptyErr, ...partialErr })))
-    expect(plainObject(omitStack(makeErr(partialErr)))).to.deep.equal(omitStack({ ...emptyErr, ...partialErr }))
+    const partialErrInfo = { op: 'partial-op', msg: 'partial-msg', externalExp, }
+    const fErrFromPartialInfo = makeErr(partialErrInfo)
+    expect(fErrFromPartialInfo.callStack).to.be.an.instanceof(Array)
+    expect(omitCallStack(fErrFromPartialInfo)).to.to.deep.equal({ ...fErrDefaults, ...partialErrInfo })
 
     // test full error info given
-    const fullErr = { op: 'full-op', code: 'full-code', msg: 'full-msg', clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp }
-    expect(makeErr(fullErr)).to.be.an.instanceof(FErr)
-    expect(omitStack(makeErr(fullErr))).to.deep.equal(omitStack(makeErr({ ...emptyErr, ...fullErr })))
-    expect(omitStack(plainObject(makeErr(fullErr)))).to.deep.equal(omitStack({ ...emptyErr, ...fullErr }))
+    const fullErrInfo = { op: 'full-op', code: 'full-code', msg: 'full-msg', clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp }
+    const fErrFromFullInfo = makeErr(fullErrInfo)
+    expect(fErrFromFullInfo.callStack).to.be.an.instanceof(Array)
+    expect(omitCallStack(fErrFromFullInfo)).to.to.deep.equal({ ...fErrDefaults, ...fullErrInfo })
   })
 
 const testErrorNotes = () => {
@@ -85,36 +159,44 @@ const testErrorNotes = () => {
 
     // test default to empty notes list
     expect(makeErr({ msg }).notes).to.deep.equal([])
+    expect(omitCallStack(makeErr({ msg }))).to.deep.equal({ ...fErrDefaults, msg })
 
     // test note list provided at err creation
     const notes = ['a', 'b']
     expect(makeErr({ msg, notes }).notes).to.deep.equal(notes)
-    expect(omitStack(makeErr({ msg, notes }))).to.deep.equal(omitStack(makeErr({ ...emptyErr, msg, notes })))
-    expect(omitStack(plainObject(makeErr({ msg, notes })))).to.deep.equal(omitStack({ ...emptyErr, msg, notes }))
+    expect(omitCallStack(makeErr({ msg, notes }))).to.deep.equal({ ...fErrDefaults, msg, notes })
 
     // test single note add
     const addedNote = 'c'
-    let errSingleNoteAdded = makeErr({ msg, notes })
-    errSingleNoteAdded = addNote(addedNote, errSingleNoteAdded)
-    expect(errSingleNoteAdded).to.equal(errSingleNoteAdded)
-    expect(omitStack(plainObject(errSingleNoteAdded))).deep.equal(omitStack({ ...emptyErr, msg, notes: [...notes, 'c'] }))
+    const fErrWithOrigNotes = makeErr({ msg, notes })
+    expect(omitCallStack(makeErr(fErrWithOrigNotes))).to.deep.equal({ ...fErrDefaults, msg, notes })
+    const fErrWithAddedNote = addNote(addedNote, fErrWithOrigNotes)
+    expect(omitCallStack(fErrWithAddedNote)).to.deep.equal({ ...fErrDefaults, msg, notes: [...notes, addedNote] })
+    expect(omitCallStack(fErrWithOrigNotes)).to.deep.equal({ ...fErrDefaults, msg, notes }) // non-mutation check
 
     // test multiple note add
     const addedNotes = ['x', 'y', 'z']
-    let errMulNotesAdded = makeErr({ msg, notes })
-    errMulNotesAdded = addNote(addedNotes, errMulNotesAdded)
-    expect(errMulNotesAdded).to.equal(errMulNotesAdded)
-    expect(omitStack(plainObject(errMulNotesAdded))).to.deep.equal(omitStack({ ...emptyErr, msg, notes: [...notes, ...addedNotes] }))
+    const fErrWithAddedNoteList = addNote(addedNotes, fErrWithOrigNotes)
+    expect(omitCallStack(fErrWithAddedNoteList)).to.deep.equal({ ...fErrDefaults, msg, notes: [...notes, ...addedNotes] })
+    expect(omitCallStack(fErrWithOrigNotes)).to.deep.equal({ ...fErrDefaults, msg, notes }) // non-mutation check
   })
 }
 
 const testErrorMerging = () => {
-  it('should merge errors correcly', async () => {
-    // const fErrDefault = makeErr()
-    // mergeErrorInfo(fErrDefault, { op: 'new op' })
+  it('should copy over non-existant props for merge', async () => {
+    expect(mergeErrInfo(fErrDefult, incomingObjWithOp)).to.deep.equal({ ...fErrDefult, ...incomingObjWithOp })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithCode)).to.deep.equal({ ...fErrDefult, ...incomingObjWithCode })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithMsg)).to.deep.equal({ ...fErrDefult, ...incomingObjWithMsg })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithClientMsg)).to.deep.equal({ ...fErrDefult, ...incomingObjWithClientMsg })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithNotes)).to.deep.equal({ ...fErrDefult, ...incomingObjWithNotes })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithExternaExp)).to.deep.equal({ ...fErrDefult, ...incomingObjWithExternaExp })
+    expect(mergeErrInfo(fErrDefult, incomingObjWithAll)).to.deep.equal({ ...fErrDefult, ...incomingObjWithAll })
 
-    //  expect(mergeErrorInfo(fErrDefault, { op: 'new op' })).to.deep.equal(makeErr({ op: 'new op' }))
+    // test with msg string input
+    expect(mergeErrInfo(fErrDefult, 'string-only-msg')).to.deep.equal({ ...fErrDefult, msg: 'string-only-msg' })
+  })
 
+  xit('should merge existing props to notes', async () => {
   })
 }
 

@@ -1,13 +1,45 @@
-// TODO: test these please
+// TODO:
+// Figure out which ones are being
+// test these please
+// put in own rep futils
 
-import { flatten, drop, concat, not, any, complement, has, propEq, prop } from 'ramda'
-import { isArray, isString, isNotObject, isNotString, isNilOrEmpty } from 'ramda-adjunct'
+import { flatten, drop, concat, not, any, complement, has, propEq, prop, is, assoc, curry } from 'ramda'
+import { isArray, isString, isNotObject, isNotString, isNilOrEmpty, isNotNil } from 'ramda-adjunct'
 
-export const plainObject = classInstance => Object.assign({}, classInstance)
 export const arrayify = input => isArray(input) ? input : [input]
 export const flatArrayify = input => flatten(arrayify(input))
 
-export const isNotObjectOrString = toCheck => isNotObject(toCheck) && isNotString(toCheck)
+export const doesNotHave = complement(has)
+
+export const isNonEmptyString = toCheck => isString(toCheck) && toCheck.length > 0
+export const isNotNonEmptyString = complement(isNonEmptyString)
+export const propIsNonEmptyString = curry((propName, obj) => isNonEmptyString(prop(propName, obj)))
+
+export const isNonEmptyArray = toCheck => isArray(toCheck) && toCheck.length > 0
+export const propIsNonEmptyArray = curry((propName, obj) => isNonEmptyArray(prop(propName, obj)))
+
+export const propIsNotNil = curry((propName, obj) => isNotNil(prop(propName, obj)))
+// export const isNotNonEmptyString = complement(isNonEmptyString)
+
+export const isNotObjectOrNonEmptyString = toCheck =>
+  isNotObject(toCheck) && isNotNonEmptyString(toCheck)
+
+// export const propIsNonEmptyArray = (propName, obj) =>
+
+
+export const stackStrToStackArr = stackStr =>
+  // drop error message and this call from stack list
+  drop(2, stackStr.split('\n').map(s => s.trim()))
+
+
+
+// ----- the line --------------------------------------------------
+
+export const copyProp = (propName, sourceObj={}, targetObj={}) =>
+  has(propName, sourceObj) ? assoc(propName, sourceObj[propName], targetObj) : targetObj
+
+export const plainObject = classInstance => Object.assign({}, classInstance)
+
 
 // Given the predicate fxn `checkPred`, check that all elements of `array` pass
 // ((a->bool), a) -> boolean
@@ -17,7 +49,7 @@ export const isArrayOf = (typeCheckPred, array) =>
 export const isStringArray = array => isArrayOf(isString, array)
 export const isNotStringArray = complement(isStringArray)
 
-export const doesNotHave = complement(has)
+// export const doesNotHave = complement(has)
 
 export const propIsNilOrEmpty = (propName, obj) => isNilOrEmpty(prop(propName, obj))
 export const propIsNotNilOrEmpty = complement(propIsNilOrEmpty)
@@ -74,8 +106,10 @@ export const msgListToStr = (msgList, appendTo='', pre='') => {
     concat(acc, `${pre}${cur}${i<strings.length-1?'\n':''}`), appendTo/* appendTo?`${appendTo}\n`:''*/)
 }
 
-// TODO: test with drop 0
 export const stackStrToArr = stackStr =>
+  // drop error message from stack list
   drop(1, stackStr.split('\n').map(s => s.trim()))
 
+export const stackArrToStr = (msg, stackArr) =>
+  msgListToStr(stackArr, `Error: ${msg}\n`, '    ')
 

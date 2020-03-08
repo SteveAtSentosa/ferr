@@ -17,7 +17,8 @@
   "private": false,
   "dependencies": {
     "ramda": "^0.26.1",
-    "ramda-adjunct": "^2.23.0"
+    "ramda-adjunct": "^2.23.0",
+    "ramda-lens-groups": "^1.2.3"
   },
   "devDependencies": {
     "@babel/cli": "^7.8.3",
