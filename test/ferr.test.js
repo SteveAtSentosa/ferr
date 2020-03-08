@@ -1,31 +1,23 @@
-import { omit, assoc, keysIn, keys, fromPairs } from 'ramda'
+import { omit, equals } from 'ramda'
 import { expect } from 'chai'
-import { addNote, makeErr, mergeErrInfo, testExports } from '../src/ferr'
+import { addNote, makeErr, throwErr, throwErrIf, testExports } from '../src/ferr'
+import { isFerr, isNotFerr, hasOp } from '../src/ferrAccess'
+
 import {
-  _tagFErr, _defaultErrMsg, isFerr, isNotFerr,
-  errInfoToFerr, setCallStack,
-  hasOp, getOp, setOp, hasCode, getCode, setCode, hasMsg, getMsg, setMsg,
-  hasClientMsg, getClientMsg, setClientMsg, hasNotes, getNotes, getNotesOrDef, setNotes,
-  hasExternalExp, doesNotHaveExternalExp, getExternalExp, setExternalExp,
-} from '../src/ferrAccess'
-import {
-  plainObject, doesNotHave, addPropIfMissing, addPropIfMissingOrEq,
-  propIsNilOrEmpty, addPropIfNillOrEmpty, stackStrToArr, stackArrToStr, arrayify, flatArrayify,
-  isNonEmptyString, propIsNonEmptyString, isNonEmptyArray, propIsNonEmptyArray, propIsNotNil, isNotObjectOrNonEmptyString
+  doesNotHave, stackStrToArr, stackArrToStr, arrayify, flatArrayify,
+  isNonEmptyString, propIsNonEmptyString, isNonEmptyArray,
+  propIsNonEmptyArray, propIsNotNil, isNotObjectOrNonEmptyString,
+  retThrownErr
 } from '../src/utils'
 
 import {
-  fErrDefaults, fErrDefult, externalExp,
-  fErrWithMsg, fErrWithOp, fErrWithCode, fErrWithClientMsg, fErrWithNotes, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
-
-  incomingObjWithOp, incomingObjWithCode, incomingObjWithMsg, incomingObjWithClientMsg, incomingObjWithNotes, incomingObjWithAll,
-  testOpObj, testCodeObj, testMsgObj, testClientMsgObj, testNotesObj, incomingObjWithExternaExp, incomingObjWithCodeAndOpAndMsg,
-  testOpFerr, testCodeFerr, testMsgFerr, testClientMsgFerr, testNotesFerr,
+  testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
+  fErrDefaults, fErrDefult, externalExp, errInfoWithOp,
+  incomingErrInfoWithOp, incomingErrInfoWithCode, incomingErrInfoWithMsg, incomingErrInfoWithClientMsg,
+  incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp
 } from './testData'
 
-const {
-  mergePropToObjOrStr, msgIsEmptyOrDefault, msgIsNotEmptyOrDefault, isErrInfo, mergeErrorInfo, FErr
-} = testExports
+const { mergeErrInfo } = testExports
 
 const runFerrTests = () => {
   describe('server tests', () => {
@@ -35,13 +27,13 @@ const runFerrTests = () => {
     testErrorCreation()
     testErrorNotes()
     testErrorMerging()
+    testErrorThrowing()
   })
 }
 
-// let externalExp
-// try { throw Error('external-exception') } catch (e) { externalExp = e }
-
+// we will skip stack comparisons
 const omitCallStack = omit(['callStack'])
+const areEquivErrs = (fErr1, fErr2) => equals(omitCallStack(fErr1), omitCallStack(fErr2))
 
 const testUtils = () => {
   it('should arrayify correctly', () => {
@@ -121,7 +113,7 @@ const testTypes = () => {
 const testAccess = () => {
   it('should access fErr props correctly', () => {
     // TODO: build these tests out
-    expect(hasOp(testOpObj)).to.be.true
+    expect(hasOp(errInfoWithOp)).to.be.true
     expect(hasOp({})).to.be.false
   })
 }
@@ -184,19 +176,33 @@ const testErrorNotes = () => {
 
 const testErrorMerging = () => {
   it('should copy over non-existant props for merge', async () => {
-    expect(mergeErrInfo(fErrDefult, incomingObjWithOp)).to.deep.equal({ ...fErrDefult, ...incomingObjWithOp })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithCode)).to.deep.equal({ ...fErrDefult, ...incomingObjWithCode })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithMsg)).to.deep.equal({ ...fErrDefult, ...incomingObjWithMsg })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithClientMsg)).to.deep.equal({ ...fErrDefult, ...incomingObjWithClientMsg })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithNotes)).to.deep.equal({ ...fErrDefult, ...incomingObjWithNotes })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithExternaExp)).to.deep.equal({ ...fErrDefult, ...incomingObjWithExternaExp })
-    expect(mergeErrInfo(fErrDefult, incomingObjWithAll)).to.deep.equal({ ...fErrDefult, ...incomingObjWithAll })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithOp)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithOp })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithCode)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithCode })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithMsg)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithMsg })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithClientMsg)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithClientMsg })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithNotes)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithNotes })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithExternaExp)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithExternaExp })
+    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithAll)).to.deep.equal({ ...fErrDefult, ...incomingErrInfoWithAll })
 
     // test with msg string input
     expect(mergeErrInfo(fErrDefult, 'string-only-msg')).to.deep.equal({ ...fErrDefult, msg: 'string-only-msg' })
   })
 
   xit('should merge existing props to notes', async () => {
+  })
+}
+
+const testErrorThrowing = () => {
+  it('should throw errors correctly', async () => {
+    expect(areEquivErrs(retThrownErr(throwErr, testMsg), fErrWithMsg)).to.be.true
+    expect(areEquivErrs(retThrownErr(throwErr, errInfoWithCodeAndOpAndMsg), fErrWithCodeAndOpAndMsg)).to.be.true
+  })
+
+  it('should conditionally throw errors correctly', async () => {
+    expect(areEquivErrs(retThrownErr(throwErrIf, true, fErrWithCodeAndOp), fErrWithCodeAndOp)).to.be.true
+    expect(areEquivErrs(retThrownErr(throwErrIf, 10 > 1, {}), fErrDefult)).to.be.true
+    expect(retThrownErr(throwErrIf, false, fErrWithCodeAndOp), fErrWithCodeAndOp).to.be.null
+    expect(retThrownErr(throwErrIf, 10 < 1, {}), fErrDefult).to.be.null
   })
 }
 

@@ -4,12 +4,13 @@ import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr, isNotObjectOrNonEmptyString
 } from './utils'
 import {
-  _tagFErr, _defaultErrMsg, isNotFerr,
-  errInfoToFerr, setCallStack,
+  _tagFErr, _defaultErrMsg, isNotFerr, errInfoToFerr, setCallStack,
   hasOp, getOp, setOp, hasCode, getCode, setCode, hasMsg, getMsg, setMsg,
   hasClientMsg, getClientMsg, setClientMsg, hasNotes, getNotes, getNotesOrDef, setNotes,
   hasExternalExp, doesNotHaveExternalExp, getExternalExp, setExternalExp,
 } from './ferrAccess'
+
+// TODO: better fxn docs
 
 // create an fErr given fErrInfo
 // {errInfo} | 'msg' -> fErr
@@ -25,9 +26,8 @@ export const addNote = curry((noteOrNoteList, fErr) => {
   return setNotes(newNoteList, fErr)
 })
 
-// TODO: can I losen this up and allow it to interchanably merge errInfo and fErr objects?
 // given an existing fErr and additional error info, merge into and return a new fErr
-export const mergeErrInfo = (existingFerr, newErrInfo) => {
+const mergeErrInfo = (existingFerr, newErrInfo) => {
 
   if (isNotFerr(existingFerr)) return makeErr(newErrInfo)
   if (isNotObjectOrNonEmptyString(newErrInfo)) return existingFerr
@@ -131,5 +131,5 @@ export const throwWith = (existingErr, newErrInfo) => {
 export const testExports = {
   _tagFErr,
   _defaultErrMsg,
-  fErrToMsgList,
+  mergeErrInfo
 }

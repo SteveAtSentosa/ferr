@@ -3,6 +3,12 @@ import { isObject } from 'ramda-adjunct'
 import LG from 'ramda-lens-groups'
 import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil } from './utils'
 
+
+//*****************************************************************************
+// all of the getters gracefuly handle attempted access to undefine objects
+// all setters return new object, with original unmutated
+//*****************************************************************************
+
 export const _tagFErr = '@@ferr'
 export const _defaultErrMsg = 'unkown error'
 

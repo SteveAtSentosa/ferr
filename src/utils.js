@@ -31,7 +31,12 @@ export const stackStrToStackArr = stackStr =>
   // drop error message and this call from stack list
   drop(2, stackStr.split('\n').map(s => s.trim()))
 
+export const reflect = v => v
 
+export const retThrownErr = (fxnThatThrows, ...argsForFxnThatThrows) => {
+  try { fxnThatThrows(...argsForFxnThatThrows); return null }
+  catch (e) { return e }
+}
 
 // ----- the line --------------------------------------------------
 
