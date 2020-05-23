@@ -98,7 +98,7 @@ export const addPropIfMissingOrEq = (propName, valToCheckAtainst, newPropVal, ob
 
 // given a string or array of strings, prepended with the specified tab
 // (['']|'', '') -> [''] | ''
-export const tab = (tabMe='', tab='    ') => {
+export const tab = (tabMe='', tab='  ') => {
   if (isStringArray(tabMe)) return tabMe.map(str => `${tab}${str}`)
   else if (isString(tabMe)) return `${tab}${tabMe}`
   else return tabMe

@@ -1,4 +1,4 @@
-import { complement, propEq } from 'ramda'
+import { complement, propEq, path } from 'ramda'
 import { isObject } from 'ramda-adjunct'
 import LG from 'ramda-lens-groups'
 import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil } from './utils'
@@ -28,6 +28,7 @@ export const setCode = LG.set(fErrLg, 'code')
 
 export const hasMsg = propIsNonEmptyString('msg')
 export const getMsg = LG.view(fErrLg, 'msg')
+export const getMsgOrDef = LG.viewOrDef(fErrLg, 'msg')
 export const setMsg = LG.set(fErrLg, 'msg')
 
 export const hasClientMsg = propIsNonEmptyString('clientMsg')
@@ -39,12 +40,17 @@ export const getNotes = LG.view(fErrLg, 'notes')
 export const getNotesOrDef = LG.viewOrDef(fErrLg, 'notes')
 export const setNotes = LG.set(fErrLg, 'notes')
 
+export const getCallStackOrDef = LG.viewOrDef(fErrLg, 'callStack')
 export const setCallStack = LG.set(fErrLg, 'callStack')
 
 export const hasExternalExp = propIsNotNil('externalExp')
 export const doesNotHaveExternalExp = complement(hasExternalExp)
 export const getExternalExp = LG.view(fErrLg, 'externalExp')
 export const setExternalExp = LG.set(fErrLg, 'externalExp')
+
+// TODO: test
+export const getExternalExpMessage = path(['externalExp', 'message'])
+export const hasExternalExpWithMessage = fErr => !!getExternalExpMessage(fErr)
 
 export const isFerr = toCheck => isObject(toCheck) && propEq('_tag', _tagFErr, toCheck)
 export const isNotFerr = complement(isFerr)

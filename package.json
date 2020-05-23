@@ -42,8 +42,9 @@
   "scripts": {
     "clean": "rimraf lib",
     "build": "yarn clean && cross-env BABEL_ENV=cjs babel src --out-dir lib",
-    "test": "mocha --r ./.register.babel.js",
+    "test": "mocha --delay --r ./.register.babel.js",
     "viz": "babel-node vizualize/vizualize.errorMessages.js",
-    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test"
+    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
+    "watch:build": "onchange 'src/**/*.js' -- yarn build"
   }
 }

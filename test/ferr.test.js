@@ -1,6 +1,6 @@
 import { omit, equals } from 'ramda'
 import { expect } from 'chai'
-import { addNote, makeErr, throwErr, throwErrIf, testExports } from '../src/ferr'
+import { addNote, makeErr, throwErr, throwErrIf, throwErrIfOrRet, testExports } from '../src/ferr'
 import { isFerr, isNotFerr, hasOp } from '../src/ferrAccess'
 
 import {
@@ -18,6 +18,9 @@ import {
 } from './testData'
 
 const { mergeErrInfo } = testExports
+
+// TODO
+// * convert all tests over to areEquivErrs()
 
 const runFerrTests = () => {
   describe('server tests', () => {
@@ -203,6 +206,13 @@ const testErrorThrowing = () => {
     expect(areEquivErrs(retThrownErr(throwErrIf, 10 > 1, {}), fErrDefult)).to.be.true
     expect(retThrownErr(throwErrIf, false, fErrWithCodeAndOp), fErrWithCodeAndOp).to.be.null
     expect(retThrownErr(throwErrIf, 10 < 1, {}), fErrDefult).to.be.null
+  })
+  it('should conditionally throw errors or return specified value', async () => {
+    expect(areEquivErrs(retThrownErr(throwErrIfOrRet, 'should-not-be-returned', true, fErrWithCodeAndOp), fErrWithCodeAndOp)).to.be.true
+    expect(areEquivErrs(retThrownErr(throwErrIfOrRet, 'should-not-be-returned', 10 > 1, {}), fErrDefult)).to.be.true
+    expect(throwErrIfOrRet('should-be-returned', false, fErrWithCodeAndOp)).to.equal('should-be-returned')
+    expect(throwErrIfOrRet('should-be-returned-also', 10 < 1, fErrWithCodeAndOp)).to.equal('should-be-returned-also')
+
   })
 }
 
