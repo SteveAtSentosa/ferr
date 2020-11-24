@@ -2,7 +2,7 @@
   "name": "ferr",
   "version": "2.1.0",
   "description": "Expressive error handling with a functional focus",
-  "main": "src/ferr.js",
+  "main": "lib/ferr.js",
   "keywords": [
     "error",
     "errors",
