@@ -1,12 +1,13 @@
-import { makeErr, testExports } from '../src/ferr'
-const { _defaultErrMsg, _tagFErr } = testExports
+import { makeFerr, testExports } from '../src/ferr'
+const { _defaultErrMsg } = testExports
 
-// leaving off call stack matching on call stack is not practical
+// leaving off call stack (matching on call stack is not practical)
+// matches defaults created by makeErr
 export const fErrDefaults = {
-  _tag: _tagFErr,
-  msg: _defaultErrMsg,
+  _tag: '@@ferr',
   op: '',
   code: '',
+  message: _defaultErrMsg,
   clientMsg: '',
   notes: [],
   externalExp: null
@@ -24,47 +25,52 @@ export const testNotes = ['test-note1', 'test-note2']
 
 export const errInfoWithOp = { op: testOp }
 export const errInfoWithCode = { code: testCode }
-export const errInfoWithMsg = { msg: testMsg }
+export const errInfoWithMsg = { message: testMsg }
 export const errInfoWithClientMsg = { clientMsg: testClientMsg }
 export const errInfoWithNotes = { notes: testNotes }
 export const errInfoWithCodeAndOp = { ...errInfoWithCode, ...errInfoWithOp }
 export const errInfoWithCodeAndOpAndMsg = { ...errInfoWithCodeAndOp, ...errInfoWithMsg }
 
 export const incomingOp = 'incoming-op'
-export const incomingCode = 'INCOMING_CODE'
+export const incomingCode = 'incoming-code'
 export const incomingMsg = 'incoming-msg'
 export const incomingClientMsg = 'incoming-client-msg'
 export const incomingNotes = ['incoming-note1', 'incoming-note2']
 
-
 export const incomingErrInfoWithOp = { op: incomingOp }
 export const incomingErrInfoWithCode = { code: incomingCode }
-export const incomingErrInfoWithMsg = { msg: incomingMsg }
+export const incomingErrInfoWithMsg = { message: incomingMsg }
 export const incomingErrInfoWithClientMsg = { clientMsg: incomingClientMsg }
 export const incomingErrInfoWithNotes = { notes: incomingNotes }
 export const incomingErrInfoWithExternaExp = { externalExp }
+
+
+export const incomingErrInfoWithCodeAndOp = {
+  ...incomingErrInfoWithCode, ...incomingErrInfoWithOp,
+}
 
 export const incomingErrInfoWithCodeAndOpAndMsg = {
   ...incomingErrInfoWithCode, ...incomingErrInfoWithOp, ...incomingErrInfoWithMsg,
 }
 
 export const incomingErrInfoWithAll = {
-  ...incomingErrInfoWithCode, ...incomingErrInfoWithOp, ...incomingErrInfoWithMsg,
-  ...incomingErrInfoWithClientMsg, ...incomingErrInfoWithNotes, ...incomingErrInfoWithExternaExp,
+  ...incomingErrInfoWithCode, ...incomingErrInfoWithOp,
+  ...incomingErrInfoWithMsg, ...incomingErrInfoWithClientMsg,
+  ...incomingErrInfoWithNotes, ...incomingErrInfoWithExternaExp,
 }
 
 export const emptyOpObj = { op: '' }
 export const emptyCodeObj = { code: '' }
-export const emptyMsgObj = { msg: '' }
+export const emptyMsgObj = { message: '' }
 export const emptyClientMsgObj = { clientMsg: '' }
 export const emptyNotesObj = { notes: [] }
 
-export const fErrDefult = makeErr()
-export const fErrWithOp = makeErr(errInfoWithOp)
-export const fErrWithCode = makeErr(errInfoWithCode)
-export const fErrWithMsg = makeErr(errInfoWithMsg)
-export const fErrWithClientMsg = makeErr(errInfoWithClientMsg)
-export const fErrWithNotes = makeErr(errInfoWithNotes)
+export const fErrDefult = makeFerr()
+export const fErrWithOp = makeFerr(errInfoWithOp)
+export const fErrWithCode = makeFerr(errInfoWithCode)
+export const fErrWithMsg = makeFerr(errInfoWithMsg)
+export const fErrWithClientMsg = makeFerr(errInfoWithClientMsg)
+export const fErrWithNotes = makeFerr(errInfoWithNotes)
 
-export const fErrWithCodeAndOp = makeErr(errInfoWithCodeAndOp)
-export const fErrWithCodeAndOpAndMsg = makeErr(errInfoWithCodeAndOpAndMsg)
+export const fErrWithCodeAndOp = makeFerr(errInfoWithCodeAndOp)
+export const fErrWithCodeAndOpAndMsg = makeFerr(errInfoWithCodeAndOpAndMsg)

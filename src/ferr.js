@@ -1,133 +1,139 @@
-import { concat, curry, propOr, prop, has } from 'ramda'
+import { concat, curry, propOr, } from 'ramda'
 import { isObject, isString, isNotObject } from 'ramda-adjunct'
 import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr,
-  isNotObjectOrNonEmptyString, stackArrToStr
+  isNotObjectOrNonEmptyString
 } from './utils'
+// to reexport
 import {
-  _tagFErr, _defaultErrMsg, isFerr, isNotFerr, errInfoToFerr, setCallStack, getCallStackOrDef,
-  hasOp, getOp, setOp, hasCode, getCode, setCode, hasMsg, getMsg, getMsgOrDef, setMsg,
-  hasClientMsg, getClientMsg, setClientMsg, hasNotes, getNotes, getNotesOrDef, setNotes,
-  hasExternalExp, doesNotHaveExternalExp, getExternalExp, setExternalExp,
-  getExternalExpMessage, hasExternalExpWithMessage
+  isFerr,
+  isNotFerr
 } from './ferrAccess'
+import * as FE from './ferrAccess'
 
-// TODO:
-// * 'message from ALL external excpetion encoutered to our notes
-// * better fxn docs
+export const defaultErrMessage = () => FE._defaultErrMsg
 
+const isExternalExp = toCheck =>
+  isNotFerr(toCheck) && FE.hasMessage(toCheck) && FE.hasStack(toCheck)
 
-// if (hasExternalExp(sourceErrInfo) && doesNotHaveExternalExp(targetFerr))
-// targetFerr = setExternalExp(getExternalExp(sourceErrInfo), targetFerr)
+// create an fErr given errInfo
+// errInfo {
+//   op: string - operation undeway when error occured
+//   code: string - error code
+//   message: string - error message
+//   clientMsg: string - user friendly message
+//   notes: 'string' | ['string'] - notes about the message
+//   externalExp: any - external exception that was caught
+// }
 
-// add message and stack so that this can be accessed as an Error Object
-const finalizeErr = fErr => ({
-  ...fErr,
-  message: getMsgOrDef(fErr),
-  stack: stackArrToStr(getCallStackOrDef(fErr))
-
-})
-
-
-// create an fErr given fErrInfo
 // {errInfo} | 'msg' -> fErr
-export const makeErr = (errInfo = _defaultErrMsg)  => {
-  let fErr
-  // create the error
-  fErr = errInfoToFerr(isString(errInfo) ? { msg: errInfo } : errInfo)
+export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
+
+  // create the starting fErr object
+  let fErr = FE.cloneErrInfoWIthDef(isString(errInfo) ? { message: errInfo } : errInfo)
 
   // add the callstack list
   const stackList = stackStrToStackArr((new Error()).stack)
-  fErr = setCallStack(stackList, fErr)
+  fErr = FE.setStack(stackList, fErr)
 
-  // TODO:
-  // * update tests to accomidate this
-  // * make util
-  // if external exception with 'message', add 'message to notes
-  if (hasExternalExpWithMessage(errInfo))
-    fErr = addNote(getExternalExpMessage(errInfo), fErr)
+  const externalExp = FE.getExternalExp(errInfo)
+  if (externalExp)
+    fErr = applyMessageFrom(externalExp, fErr)
 
-  return finalizeErr(fErr)
+  return fErr
 }
-
-// TODO: test
-// TODO: can I do a conditional calls, allowing for pips (addNoteIf, addExternalExpIf, etc ...)
-export const addExternalExp = curry((externalExp, fErr) => {
-  if (!externalExp) return fErr
-  let fErrToReturn = fErr
-  if (has('message', externalExp))
-    fErrToReturn = addNote(prop('message', externalExp), fErrToReturn)
-  if (doesNotHaveExternalExp(fErr))
-    fErrToReturn = setExternalExp(externalExp, fErrToReturn)
-  return finalizeErr(fErrToReturn)
-})
-
-// TODO: test
-export const addExternalExpAndThrow = curry((externalExp, fErr) => {
-  throw addExternalExp(externalExp, fErr)
-})
 
 // Return an fErr derived from original fErr, with notes added
 // '' | [''] -> fErr -> fErr
-export const addNote = curry((noteOrNoteList, fErr) => {
-  const newNoteList = concat(getNotesOrDef(fErr), flatArrayify(noteOrNoteList))
-  return setNotes(newNoteList, fErr)
+export const addNotes = curry((noteOrNoteList, fErr) => {
+  const newNoteList = concat(FE.getNotesOrDef(fErr), flatArrayify(noteOrNoteList))
+  return FE.setNotes(newNoteList, fErr)
 })
 
-// given an existing fErr and additional error info, merge into and return a new fErr
-const mergeErrInfo = (existingFerr, newErrInfo) => {
+// Apply a message string or object to an existing fErr
+// '' | { message } -> {fErr} -> {fErr}
+const applyMessageFrom = curry((messageInfo, fErr) => {
 
-  if (isNotFerr(existingFerr)) return makeErr(newErrInfo)
-  if (isNotObjectOrNonEmptyString(newErrInfo)) return existingFerr
+  if (isNotFerr(fErr)) return fErr
+  let fErrToReturn = fErr
+
+  const message = FE.extractMessage(messageInfo)
+  if (message)
+    fErrToReturn = FE.hasNonDefaultMessage(fErr) ?
+      addNotes(message, fErr) :
+      FE.setMessage(message, fErr)
+
+  return fErrToReturn
+})
+
+// given an existing fErr and incomingErrInfo as one of the following:
+//   (1) incoming fErr
+//   (2) incoming fErrInfo
+//   (3) incoming external exception
+//   (4) incoming error string
+// A new fErr is returned with incomingErrInfo merged into existingFerr
+// {fErr} -> {fErr} | { errInfo } | 'message' | {exception} -> {fErr}
+const mergeErrInfo = (existingFerr, incomingErrInfo) => {
+
+  if (isNotFerr(existingFerr)) return makeFerr(incomingErrInfo)
+  if (isNotObjectOrNonEmptyString(incomingErrInfo)) return existingFerr
 
   let noteStr = ''
-  const sourceErrInfo = isString(newErrInfo) ? { msg: newErrInfo } : newErrInfo
+  const sourceErrInfo = isString(incomingErrInfo) ? { message: incomingErrInfo } : incomingErrInfo
   let targetFerr = existingFerr
 
   // copy over code, op, msg if missing, or add to notes if not
 
-  if (hasCode(sourceErrInfo)) {
-    if (hasCode(targetFerr))
-      noteStr += `Code: ${getCode(sourceErrInfo)}`
+  if (FE.hasCode(sourceErrInfo)) {
+    if (FE.hasCode(targetFerr))
+      noteStr += `Code: ${FE.getCode(sourceErrInfo)}`
     else
-      targetFerr = setCode(getCode(sourceErrInfo), targetFerr)
+      targetFerr = FE.setCode(FE.getCode(sourceErrInfo), targetFerr)
   }
 
-  if (hasOp(sourceErrInfo)) {
-    if (hasOp(targetFerr))
-      noteStr += `, ${getOp(sourceErrInfo)}`
+  if (FE.hasOp(sourceErrInfo)) {
+    if (FE.hasOp(targetFerr))
+      noteStr += `${noteStr ? ', ' : ''}` + `Op: ${FE.getOp(sourceErrInfo)}`
     else
-      targetFerr = setOp(getOp(sourceErrInfo), targetFerr)
+      targetFerr = FE.setOp(FE.getOp(sourceErrInfo), targetFerr)
   }
-
-
-  if (hasMsg(sourceErrInfo)) {
-    if (hasMsg(targetFerr) && getMsg(targetFerr) !== _defaultErrMsg)
-      noteStr += ` => ${getMsg(sourceErrInfo)}`
-    else
-      targetFerr = setMsg(getMsg(sourceErrInfo), targetFerr)
-  }
-
-  // add note string for anything that was not coppied over
-  if (noteStr)
-    targetFerr = addNote(noteStr, targetFerr)
 
   // copy over clientMsg if missing, or add to notes if not
-  if (hasClientMsg(sourceErrInfo)) {
-    targetFerr = hasClientMsg(targetFerr) ?
-      addNote(getClientMsg(sourceErrInfo), targetFerr) :
-      setClientMsg(getClientMsg(sourceErrInfo), targetFerr)
+  if (FE.hasClientMsg(sourceErrInfo)) {
+    targetFerr = FE.hasClientMsg(targetFerr) ?
+      addNotes(FE.getClientMsg(sourceErrInfo), targetFerr) :
+      FE.setClientMsg(FE.getClientMsg(sourceErrInfo), targetFerr)
   }
 
+  // if incoming errInfo has a message, adopt it if target does not,
+  // or else add to notes
+  if (FE.hasNonDefaultMessage(sourceErrInfo)) {
+    if (FE.hasNonDefaultMessage(targetFerr))
+      noteStr += `${noteStr?': ':''}` +  `${FE.getMessage(sourceErrInfo)}`
+    else {
+      targetFerr = FE.setMessage(
+        noteStr + `${noteStr?': ':''}` + `${FE.getMessage(sourceErrInfo)}`, targetFerr
+      )
+      noteStr = ''
+    }
+  }
+  // add note string for anything that was not coppied over
+  if (noteStr)
+    targetFerr = addNotes(noteStr, targetFerr)
+
   // append any incoming notes
-  if (hasNotes(sourceErrInfo))
-    targetFerr = addNote(getNotes(sourceErrInfo), targetFerr)
+  if (FE.hasNotes(sourceErrInfo))
+    targetFerr = addNotes(FE.getNotes(sourceErrInfo), targetFerr)
 
-  // grap the external exception if we don't already have one
-  if (hasExternalExp(sourceErrInfo) && doesNotHaveExternalExp(targetFerr))
-    targetFerr = setExternalExp(getExternalExp(sourceErrInfo), targetFerr)
+  const externalExp =
+    isExternalExp(incomingErrInfo) ? incomingErrInfo :
+    FE.hasExternalExp(incomingErrInfo) ? FE.getExternalExp(incomingErrInfo) :
+    null
 
-  return finalizeErr(targetFerr)
+  if (externalExp && FE.doesNotHaveExternalExp(targetFerr))
+    targetFerr =FE.setExternalExp(externalExp, targetFerr)
+
+  return targetFerr
 }
 
 const fErrToMsgList = (fErr, tabStr='') => {
@@ -135,16 +141,17 @@ const fErrToMsgList = (fErr, tabStr='') => {
 
   // TODO: test this line
   if (isNotFerr(fErr)) {
-    // assume its an external exception
-    return fErrToMsgList(makeErr({ externalExp: fErr }))
+    return fErr instanceof Error ?
+      fErrToMsgList(makeFerr({ externalExp: fErr })) :
+      fErrToMsgList(makeFerr(fErr))
   }
 
   const {
-    op = '',  msg = _defaultErrMsg, clientMsg = '', code = '', notes = [], externalExp = null
+    op = '',  message = FE._defaultErrMsg, clientMsg = '', code = '', notes = [], externalExp = null
   } = fErr
 
   const msgList = ['\nERROR encountered!']
-  msgList.push(tab(`Msg: ${op ? op+' => ' : ''}${msg}`))
+  msgList.push(tab(`Msg: ${op ? op+' => ' : ''}${message}`))
   if (clientMsg) msgList.push(tab(`Client msg: ${clientMsg}`))
   if (code) msgList.push(tab(`Code: ${code}`))
   if (notes.length > 0) {
@@ -152,8 +159,8 @@ const fErrToMsgList = (fErr, tabStr='') => {
     notes.forEach(note => msgList.push(tab(note)))
   }
 
-  msgList.push('Internal Error Call Stack:')
-  propOr([], 'callStack', fErr).forEach(line => msgList.push(tab(line)))
+  msgList.push('Call Stack:')
+  propOr([], 'stack', fErr).forEach(line => msgList.push(tab(line)))
 
   const e = externalExp
   if (e) {
@@ -180,39 +187,37 @@ export const logFerr = fErr => {
   return fErr
 }
 
-export const throwErr = errInfo => { throw makeErr(errInfo) }
+export const throwFerr = errInfo => { throw makeFerr(errInfo) }
 
-export const throwErrIf = (condition, errInfo) => {
-  if (condition) throwErr(errInfo)
+export const throwFerrIf = (condition, errInfo) => {
+  if (condition) throwFerr(errInfo)
 }
 
 // throws toThrow if condition is true, otherwise
 // returns toPassThrough
-// TODO: test
 export const throwIf = curry((condition, toThrow) => {
   if (condition) throw toThrow
 })
 
-// TODO: test
-export const fThrow = e => { throw e }
+export const reThrowWithFerr = curry((newErrorInfo, incomingErrInfo) => {
+  throw mergeErrInfo(makeFerr(newErrorInfo), incomingErrInfo)
+})
 
-// TODO: This might be a bit too much
+// TODO: This might be a bit too much ??
 export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => {
-  if (condition) throwErr(errInfo)
+  if (condition) throwFerr(errInfo)
   return toRetIfConditionIsFalse
-}
-
-export const throwWith = (existingErr, newErrInfo) => {
 }
 
 // passthrough exports
 export {
-  isFerr, isNotFerr, getCode
+  isFerr,
+  isNotFerr,
 }
 
 // functions that we want to expose to testing, but not to end clients
 export const testExports = {
-  _tagFErr,
-  _defaultErrMsg,
+  _tagFErr: FE._tagFErr,
+  _defaultErrMsg: FE._defaultErrMsg,
   mergeErrInfo
 }

@@ -3,8 +3,13 @@
 // test these please
 // put in own rep futils
 
-import { flatten, drop, concat, not, any, complement, has, propEq, prop, is, assoc, curry } from 'ramda'
-import { isArray, isString, isNotObject, isNotString, isNilOrEmpty, isNotNil } from 'ramda-adjunct'
+import {
+  flatten, drop, concat, not, any, complement, has, propEq, prop,
+  reverse, assoc, curry
+} from 'ramda'
+import {
+  isArray, isString, isNotObject, isNilOrEmpty, isNotNil
+} from 'ramda-adjunct'
 
 export const arrayify = input => isArray(input) ? input : [input]
 export const flatArrayify = input => flatten(arrayify(input))
@@ -31,12 +36,19 @@ export const stackStrToStackArr = stackStr =>
   // drop error message and this call from stack list
   drop(2, stackStr.split('\n').map(s => s.trim()))
 
-export const reflect = v => v
-
 export const retThrownErr = (fxnThatThrows, ...argsForFxnThatThrows) => {
-  try { fxnThatThrows(...argsForFxnThatThrows); return null }
-  catch (e) { return e }
+  try { fxnThatThrows(...argsForFxnThatThrows); return null } catch (e) { return e }
 }
+
+export const reflect = a => a
+
+export const applyAsync = (acc, val) => acc.then(val)
+
+
+// handles pipeline of any combination of sync and asyn functions
+// Always returns a promise, even if all fxns are async
+// This allows .catch to be used in all pipelines
+export const fPipe = (...funcs) => x => funcs.reduce(applyAsync, Promise.resolve(x))
 
 // ----- the line --------------------------------------------------
 
@@ -117,4 +129,6 @@ export const stackStrToArr = stackStr =>
 
 export const stackArrToStr = (msg, stackArr) =>
   msgListToStr(stackArr, `Error: ${msg}\n`, '    ')
+
+
 

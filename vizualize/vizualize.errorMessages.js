@@ -1,5 +1,5 @@
 import { omit } from 'ramda'
-import { makeErr, fErrStr } from '../src/ferr'
+import { makeFerr, fErrStr } from '../src/ferr'
 
 
 // return an Error object given with the additional props in errInfo added, and message set to msg
@@ -25,13 +25,13 @@ const errInfo = {
 
 
 console.log('\n... fErr with just an error message\n')
-fErr = makeErr('An string only fErr error message')
+fErr = makeFerr('An string only fErr error message')
 console.log(fErrStr(fErr))
 
 console.log('\n... fErr without exception\n')
-fErr = makeErr(omit(['externalExp'], errInfo))
+fErr = makeFerr(omit(['externalExp'], errInfo))
 console.log(fErrStr(fErr))
 
 console.log('\n... fErr with exception\n')
-fErr = makeErr(errInfo)
+fErr = makeFerr(errInfo)
 console.log(fErrStr(fErr))

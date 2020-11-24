@@ -1,5 +1,5 @@
-import { complement, propEq, path } from 'ramda'
-import { isObject } from 'ramda-adjunct'
+import { complement, propEq, pipe } from 'ramda'
+import { isObject, isString, isNotNil } from 'ramda-adjunct'
 import LG from 'ramda-lens-groups'
 import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil } from './utils'
 
@@ -12,27 +12,36 @@ import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil } from './utils
 export const _tagFErr = '@@ferr'
 export const _defaultErrMsg = 'unkown error'
 
-const fErrProps =    ['_tag',    'op', 'code', 'msg',         'clientMsg', 'notes', 'callStack', 'externalExp']
-const fErrDefaults = [_tagFErr,  '',   '',     _defaultErrMsg, '',          [],      [],          null]
+const fErrProps =    ['_tag',    'op', 'code', 'message',         'clientMsg', 'notes', 'stack', 'externalExp']
+const fErrDefaults = [_tagFErr,  '',   '',     _defaultErrMsg,    '',           [],      [],      null]
 
-const fErrLg = LG.create(fErrProps, fErrDefaults)
-export const errInfoToFerr = LG.cloneWithDef(fErrLg)
+const fErrLg = LG.create({
+  propList: fErrProps,
+  defaults: fErrDefaults
+})
+
+export const cloneErrInfoWIthDef = LG.cloneWithDef(fErrLg)
 
 export const hasOp = propIsNonEmptyString('op')
 export const getOp = LG.view(fErrLg, 'op')
+export const getOpOrDef = LG.viewOrDef(fErrLg, 'op')
 export const setOp = LG.set(fErrLg, 'op')
 
 export const hasCode = propIsNonEmptyString('code')
 export const getCode = LG.view(fErrLg, 'code')
+export const getCodeOrDef = LG.viewOrDef(fErrLg, 'code')
 export const setCode = LG.set(fErrLg, 'code')
 
-export const hasMsg = propIsNonEmptyString('msg')
-export const getMsg = LG.view(fErrLg, 'msg')
-export const getMsgOrDef = LG.viewOrDef(fErrLg, 'msg')
-export const setMsg = LG.set(fErrLg, 'msg')
+
+export const hasMessage = propIsNonEmptyString('message')
+export const doesNotHaveMessage = complement(hasMessage)
+export const getMessage = LG.view(fErrLg, 'message')
+export const getMessageOrDef = LG.viewOrDef(fErrLg, 'message')
+export const setMessage = LG.set(fErrLg, 'message')
 
 export const hasClientMsg = propIsNonEmptyString('clientMsg')
 export const getClientMsg = LG.view(fErrLg, 'clientMsg')
+export const getClientMsgOrDef = LG.viewOrDef(fErrLg, 'clientMsg')
 export const setClientMsg = LG.set(fErrLg, 'clientMsg')
 
 export const hasNotes = propIsNonEmptyArray('notes')
@@ -40,17 +49,32 @@ export const getNotes = LG.view(fErrLg, 'notes')
 export const getNotesOrDef = LG.viewOrDef(fErrLg, 'notes')
 export const setNotes = LG.set(fErrLg, 'notes')
 
-export const getCallStackOrDef = LG.viewOrDef(fErrLg, 'callStack')
-export const setCallStack = LG.set(fErrLg, 'callStack')
+export const getStackOrDef = LG.viewOrDef(fErrLg, 'stack')
+export const setStack = LG.set(fErrLg, 'stack')
+export const getStack = LG.view(fErrLg, 'stack')
+export const hasStack = pipe(getStack, isNotNil)
+export const doesNotHaveStack = complement(hasStack)
 
 export const hasExternalExp = propIsNotNil('externalExp')
 export const doesNotHaveExternalExp = complement(hasExternalExp)
 export const getExternalExp = LG.view(fErrLg, 'externalExp')
+export const getExternalExpOrDef = LG.viewOrDef(fErrLg, 'externalExp')
 export const setExternalExp = LG.set(fErrLg, 'externalExp')
 
-// TODO: test
-export const getExternalExpMessage = path(['externalExp', 'message'])
-export const hasExternalExpWithMessage = fErr => !!getExternalExpMessage(fErr)
+// if toCheck is object with { message } string prop return the message string
+// if toCheck is a string return it (assuming it is a message string)
+// otherwise return null
+export const extractMessage = toCheck =>
+  isString(toCheck) ? toCheck :
+  hasMessage(toCheck) ? getMessage(toCheck) :
+  null
+
+export const hasDefaultMessage = toCheck => getMessage(toCheck) === _defaultErrMsg
+export const doesNotHaveDefaultMessage = complement(hasDefaultMessage)
+export const hasNonDefaultMessage = toCheck =>
+  hasMessage(toCheck) && doesNotHaveDefaultMessage(toCheck)
+
 
 export const isFerr = toCheck => isObject(toCheck) && propEq('_tag', _tagFErr, toCheck)
 export const isNotFerr = complement(isFerr)
+

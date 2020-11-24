@@ -5,9 +5,9 @@
       {
         "targets": {
           "node": "current"
-        },
-        "corejs": "3.6.4",
-        "useBuiltIns": "usage"
+        }//,
+        // "corejs": "3.6.4",
+        // "useBuiltIns": "usage"
       }
     ]
   ],
