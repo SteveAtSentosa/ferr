@@ -193,17 +193,17 @@ export const throwFerrIf = (condition, errInfo) => {
   if (condition) throwFerr(errInfo)
 }
 
+// throws toThrow if condition is true
+export const throwIf = (condition, toThrow) => {
+  if (condition) throw toThrow
+}
+
 // throws toThrow if condition is true,
 // otherwise returns toPassThrough
 export const throwIfOrPassthrough = curry((condition, toThrow, toPassThrough) => {
   if (condition) throw toThrow
   return toPassThrough
 })
-
-// throws toThrow if condition is true
-export const throwIf = (condition, toThrow) => {
-  if (condition) throw toThrow
-}
 
 export const reThrowWithFerr = curry((newErrorInfo, incomingErrInfo) => {
   throw mergeErrInfo(makeFerr(newErrorInfo), incomingErrInfo)
