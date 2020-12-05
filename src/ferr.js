@@ -195,8 +195,9 @@ export const throwFerrIf = (condition, errInfo) => {
 
 // throws toThrow if condition is true, otherwise
 // returns toPassThrough
-export const throwIf = curry((condition, toThrow) => {
+export const throwIf = curry((condition, toThrow, toPassThrough=null) => {
   if (condition) throw toThrow
+  return toPassThrough
 })
 
 export const reThrowWithFerr = curry((newErrorInfo, incomingErrInfo) => {
