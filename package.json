@@ -40,9 +40,10 @@
     "rimraf": "^3.0.2"
   },
   "scripts": {
+    "prepub": "yarn clean && yarn build && yarn test",
+    "version:patch": "npm version patch",
     "clean": "rimraf lib",
     "build": "yarn clean && cross-env BABEL_ENV=cjs babel src --out-dir lib",
-    "test-orig": "./node_modules/.bin/mocha --delay --r ./.register.babel.js",
     "test": "./node_modules/.bin/mocha --require @babel/register",
     "viz": "babel-node vizualize/vizualize.errorMessages.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
