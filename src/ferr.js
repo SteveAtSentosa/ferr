@@ -218,6 +218,20 @@ export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => 
   return toRetIfConditionIsFalse
 }
 
+
+// retur errInfo Objects with supplied values or defaults
+export const withFerrDefaults = (errInfoDefaults, errInfo) => {
+  return {
+    op: errInfo.op || errInfoDefaults.op,
+    code: errInfo.code || errInfoDefaults.code,
+    message: errInfo.message || errInfoDefaults.message,
+    clientMsg: errInfo.clientMsg || errInfoDefaults.clientMsg,
+    notes: errInfo.notes || errInfoDefaults.notes,
+    externalExp: errInfo.externalExp || errInfoDefaults.externalExp,
+  }
+}
+
+
 // passthrough exports
 export {
   isFerr,
