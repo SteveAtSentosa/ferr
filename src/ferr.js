@@ -205,9 +205,12 @@ export const throwIfOrPassthrough = curry((condition, toThrow, toPassThrough) =>
   return toPassThrough
 })
 
-export const reThrowWithFerr = curry((newErrorInfo, incomingErrInfo) => {
-  throw mergeErrInfo(makeFerr(newErrorInfo), incomingErrInfo)
+export const reThrowWithFerr = curry((existingFerr, incomingErrInfo) => {
+  throw mergeErrInfo(makeFerr(existingFerr), incomingErrInfo)
 })
+
+export const reThrowWith = reThrowWithFerr
+export const throwWith = reThrowWithFerr
 
 // TODO: This might be a bit too much ??
 export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => {
