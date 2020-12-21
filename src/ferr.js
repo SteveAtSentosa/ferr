@@ -43,6 +43,19 @@ export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
   return fErr
 }
 
+// TODO: add tests
+// return errInfo Objects with supplied values or defaults
+export const makeFerrWithDefaults = (errInfo, errInfoDefaults) =>
+  makeFerr({
+    op: errInfo.op || errInfoDefaults.op,
+    code: errInfo.code || errInfoDefaults.code,
+    message: errInfo.message || errInfoDefaults.message,
+    clientMsg: errInfo.clientMsg || errInfoDefaults.clientMsg,
+    notes: errInfo.notes || errInfoDefaults.notes,
+    externalExp: errInfo.externalExp || errInfoDefaults.externalExp,
+  })
+
+
 // Return an fErr derived from original fErr, with notes added
 // '' | [''] -> fErr -> fErr
 export const addNotes = curry((noteOrNoteList, fErr) => {
@@ -217,20 +230,6 @@ export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => 
   if (condition) throwFerr(errInfo)
   return toRetIfConditionIsFalse
 }
-
-
-// retur errInfo Objects with supplied values or defaults
-export const withFerrDefaults = (errInfoDefaults, errInfo) => {
-  return {
-    op: errInfo.op || errInfoDefaults.op,
-    code: errInfo.code || errInfoDefaults.code,
-    message: errInfo.message || errInfoDefaults.message,
-    clientMsg: errInfo.clientMsg || errInfoDefaults.clientMsg,
-    notes: errInfo.notes || errInfoDefaults.notes,
-    externalExp: errInfo.externalExp || errInfoDefaults.externalExp,
-  }
-}
-
 
 // passthrough exports
 export {
