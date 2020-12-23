@@ -73,8 +73,11 @@ export const hasDefaultMessage = toCheck => getMessage(toCheck) === _defaultErrM
 export const doesNotHaveDefaultMessage = complement(hasDefaultMessage)
 export const hasNonDefaultMessage = toCheck =>
   hasMessage(toCheck) && doesNotHaveDefaultMessage(toCheck)
+export const doesNotHaveNonDefaultMessage = complement(hasNonDefaultMessage)
 
 
 export const isFerr = toCheck => isObject(toCheck) && propEq('_tag', _tagFErr, toCheck)
 export const isNotFerr = complement(isFerr)
 
+export const isFerrOrString = toCheck => (isFerr(toCheck) || isString(toCheck))
+export const isNotFerrOrString = complement(isFerrOrString)

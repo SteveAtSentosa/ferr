@@ -1,8 +1,8 @@
 import { concat, curry, head, propOr, } from 'ramda'
-import { isObject, isString, isArray, isNotObject } from 'ramda-adjunct'
+import { isObject, isString, isArray, isNotObject, isNotString } from 'ramda-adjunct'
 import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr,
-  isNotObjectOrNonEmptyString
+  isNotObjectOrNonEmptyString, isNonEmptyArray, arrayify
 } from './utils'
 // to reexport
 import {
@@ -25,16 +25,30 @@ const isExternalExp = toCheck =>
 //   notes: 'string' | ['string'] - notes about the message
 //   externalExp: any - external exception that was caught
 // }
-
-// {errInfo} | 'msg' -> fErr
+// if an fErr is passed in, it is returned directly
+// {errInfo} | 'msg' | {fErr} -> fErr
 export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
+
+  if (isFerr(errInfo)) return errInfo
 
   // create the starting fErr object
   let fErr = FE.cloneErrInfoWIthDef(isString(errInfo) ? { message: errInfo } : errInfo)
 
+  // If notes was passed in as a string
+  if (isString(FE.getNotes(errInfo)))
+    fErr = FE.setNotes([FE.getNotes(errInfo)], fErr)
+
   // add the callstack list
   const stackList = stackStrToStackArr((new Error()).stack)
   fErr = FE.setStack(stackList, fErr)
+
+  // if no incomding message but notes are present,
+  // use the first note as the message
+  if (
+    FE.doesNotHaveNonDefaultMessage(fErr) &&
+    isNonEmptyArray(FE.getNotes(fErr))
+  )
+    fErr = FE.setMessage(head(FE.getNotes(fErr)), fErr)
 
   const externalExp = FE.getExternalExp(errInfo)
   if (externalExp)
@@ -65,12 +79,12 @@ export const addNotes = curry((noteOrNoteList, fErr) => {
 
 // Apply a message string or object to an existing fErr
 // '' | { message } -> {fErr} -> {fErr}
-const applyMessageFrom = curry((messageInfo, fErr) => {
+const applyMessageFrom = curry((messageInfoOrStr, fErr) => {
 
-  if (isNotFerr(fErr)) return fErr
-  let fErrToReturn = fErr
+  if (FE.isNotFerrOrString(fErr)) return fErr
+  let fErrToReturn = makeFerr(fErr)
 
-  const message = FE.extractMessage(messageInfo)
+  const message = FE.extractMessage(messageInfoOrStr)
   if (message)
     fErrToReturn = FE.hasNonDefaultMessage(fErr) ?
       addNotes(message, fErr) :
@@ -226,19 +240,16 @@ export const reThrowWith = reThrowWithFerr
 export const throwWith = reThrowWithFerr
 
 // TODO: test
-export const reThrowWithNotes = (noteOrNoteList, err) => {
+export const reThrowWithNotes = curry((noteOrNoteList, err) => {
   if (isFerr(err))
     throw addNotes(flatArrayify(noteOrNoteList), err)
 
   // if err is not an fErr, treat it as external exception
-  const externalExp = err
-  const notes = flatArrayify(noteOrNoteList)
-  const message = isArray(noteOrNoteList) ?
-    head(noteOrNoteList) :
-    noteOrNoteList
-
-  throw makeFerr({ message, notes, externalExp })
-}
+  throw makeFerr({
+    notes: noteOrNoteList,
+    externalExp: err
+  })
+})
 
 // TODO: This might be a bit too much ??
 export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => {

@@ -53,6 +53,10 @@ export const incomingErrInfoWithCodeAndOpAndMsg = {
   ...incomingErrInfoWithCode, ...incomingErrInfoWithOp, ...incomingErrInfoWithMsg,
 }
 
+export const incomingErrInfoWithMsgAndNotes = {
+  ...incomingErrInfoWithMsg, ...incomingErrInfoWithNotes
+}
+
 export const incomingErrInfoWithAll = {
   ...incomingErrInfoWithCode, ...incomingErrInfoWithOp,
   ...incomingErrInfoWithMsg, ...incomingErrInfoWithClientMsg,
@@ -74,3 +78,5 @@ export const fErrWithNotes = makeFerr(errInfoWithNotes)
 
 export const fErrWithCodeAndOp = makeFerr(errInfoWithCodeAndOp)
 export const fErrWithCodeAndOpAndMsg = makeFerr(errInfoWithCodeAndOpAndMsg)
+export const fErrWithMsgAndNotes = makeFerr(incomingErrInfoWithMsgAndNotes)
+

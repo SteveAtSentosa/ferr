@@ -5,7 +5,7 @@
 
 import {
   flatten, drop, concat, not, any, complement, has, propEq, prop,
-  reverse, assoc, curry
+  reverse, assoc, curry, head
 } from 'ramda'
 import {
   isArray, isString, isNotObject, isNilOrEmpty, isNotNil
@@ -13,6 +13,10 @@ import {
 
 export const arrayify = input => isArray(input) ? input : [input]
 export const flatArrayify = input => flatten(arrayify(input))
+
+// if toCheck is an array, return first element, otherwise return toCheck
+export const headOrReflect = toCheck =>
+  isArray(toCheck) ? head(toCheck) : toCheck
 
 export const doesNotHave = complement(has)
 

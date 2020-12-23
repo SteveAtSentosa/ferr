@@ -1,9 +1,9 @@
-import { omit, equals } from 'ramda'
+import { omit, equals, head } from 'ramda'
 import { expect } from 'chai'
 import {
   addNotes, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet, testExports,
-  isFerr, isNotFerr, reThrowWithFerr, logFerr,
-  defaultErrMessage
+  isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes,
+  defaultErrMessage, logFerr,
 } from '../src/ferr'
 import {
   hasOp,
@@ -24,12 +24,11 @@ import {
 import {
   testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
   fErrWithCode, fErrWithClientMsg, errInfoWithCode,
-  fErrDefaults, fErrDefult, externalExp, errInfoWithOp, fErrWithOp, errInfoWithMsg,
+  fErrDefaults, fErrDefult, externalExp, errInfoWithOp, fErrWithOp, fErrWithMsgAndNotes, errInfoWithMsg,
   incomingErrInfoWithOp, incomingErrInfoWithCode, incomingErrInfoWithMsg, incomingErrInfoWithClientMsg,
-  incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp,
-  incomingErrInfoWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg
+  incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp, incomingErrInfoWithMsgAndNotes,
+  incomingErrInfoWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg, errInfoWithNotes, fErrWithNotes
 } from './testData'
-
 
 const { mergeErrInfo } = testExports
 
@@ -194,6 +193,7 @@ const testAccess = () => {
 
 const testErrorCreation = () =>
   it('should make errors correctly', () => {
+
     // test no error info given
     const fErrNoInfo = makeFerr()
     expect(fErrNoInfo.stack).to.be.an.instanceof(Array)
@@ -214,10 +214,12 @@ const testErrorCreation = () =>
       ...partialErrInfo,
       notes: ['external-exception']
     })).to.be.true
-    expect(areEquivErrs(fErrFromPartialInfo, makeFerr(partialErrInfo))).to.be.true // can make ferr from ferr
 
     // test full error info given
-    const fullErrInfo = { op: 'full-op', code: 'full-code', message: 'full-msg', clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp }
+    const fullErrInfo = {
+      op: 'full-op', code: 'full-code', message: 'full-msg',
+      clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp
+    }
     const fErrFromFullInfo = makeFerr(fullErrInfo)
     expect(fErrFromFullInfo.stack).to.be.an.instanceof(Array)
     expect(areEquivErrs(fErrFromFullInfo, {
@@ -225,7 +227,20 @@ const testErrorCreation = () =>
       ...fullErrInfo,
       notes: ['some', 'note', 'external-exception']
     })).to.be.true
-    expect(areEquivErrs(fErrFromFullInfo, makeFerr(fullErrInfo))).to.be.true // can make ferr from ferr
+
+    // check that if an fErr is provided it is simply returned
+    expect(areEquivErrs(fErrFromPartialInfo, fErrFromPartialInfo)).to.be.true
+    expect(areEquivErrs(fErrFromFullInfo, fErrFromFullInfo)).to.be.true
+
+    // test using notes as message when not present
+    expect(areEquivErrs(
+      makeFerr(errInfoWithNotes),
+      { ...fErrWithNotes, message: errInfoWithNotes.notes[0] }
+    )).to.be.true
+    expect(areEquivErrs(
+      makeFerr(incomingErrInfoWithMsgAndNotes),
+      fErrWithMsgAndNotes
+    )).to.be.true
   })
 
 const testErrorCreationWithExternalExceptions = () => {
@@ -433,7 +448,29 @@ const testErrorThrowing = () => {
     // not sure why I created throwErrIfOrRet
     expect(throwErrIfOrRet('should-be-returned', false, fErrWithCodeAndOp)).to.equal('should-be-returned')
     expect(throwErrIfOrRet('should-be-returned-also', 10 < 1, fErrWithCodeAndOp)).to.equal('should-be-returned-also')
+  })
 
+  it('should rethrow with notes correctly', async () => {
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithNotes, ['note added on throw'], fErrWithCodeAndOpAndMsg),
+      { ...fErrWithCodeAndOpAndMsg, notes: ['note added on throw'] }
+    )).to.be.true
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithNotes, ['t1', 't2'], fErrWithMsgAndNotes),
+      { ...fErrWithMsgAndNotes, notes: [...fErrWithMsgAndNotes.notes, 't1', 't2'] }
+    )).to.be.true
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithNotes, 't3', fErrWithMsgAndNotes),
+      { ...fErrWithMsgAndNotes, notes: [...fErrWithMsgAndNotes.notes, 't3'] }
+    )).to.be.true
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithNotes, ['this aint good'], externalExp),
+      makeFerr({ message: 'this aint good', notes: ['this aint good'], externalExp })
+    )).to.be.true
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithNotes, 'I mean its really bad', externalExp),
+      makeFerr({ message: 'I mean its really bad', notes: ['I mean its really bad'], externalExp })
+    )).to.be.true
   })
 }
 
