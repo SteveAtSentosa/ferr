@@ -1,5 +1,5 @@
-import { concat, curry, propOr, } from 'ramda'
-import { isObject, isString, isNotObject } from 'ramda-adjunct'
+import { concat, curry, head, propOr, } from 'ramda'
+import { isObject, isString, isArray, isNotObject } from 'ramda-adjunct'
 import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr,
   isNotObjectOrNonEmptyString
@@ -224,6 +224,21 @@ export const reThrowWithFerr = curry((existingFerr, incomingErrInfo) => {
 
 export const reThrowWith = reThrowWithFerr
 export const throwWith = reThrowWithFerr
+
+// TODO: test
+export const reThrowWithNotes = (noteOrNoteList, err) => {
+  if (isFerr(err))
+    throw addNotes(flatArrayify(noteOrNoteList), err)
+
+  // if err is not an fErr, treat it as external exception
+  const externalExp = err
+  const notes = flatArrayify(noteOrNoteList)
+  const message = isArray(noteOrNoteList) ?
+    head(noteOrNoteList) :
+    noteOrNoteList
+
+  throw makeFerr({ message, notes, externalExp })
+}
 
 // TODO: This might be a bit too much ??
 export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => {
