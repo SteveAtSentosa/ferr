@@ -79,4 +79,5 @@ export const fErrWithNotes = makeFerr(errInfoWithNotes)
 export const fErrWithCodeAndOp = makeFerr(errInfoWithCodeAndOp)
 export const fErrWithCodeAndOpAndMsg = makeFerr(errInfoWithCodeAndOpAndMsg)
 export const fErrWithMsgAndNotes = makeFerr(incomingErrInfoWithMsgAndNotes)
+export const fErrWithAll = makeFerr(incomingErrInfoWithAll)
 

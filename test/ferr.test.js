@@ -1,9 +1,9 @@
 import { omit, equals, head } from 'ramda'
 import { expect } from 'chai'
 import {
-  addNotes, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet, testExports,
-  isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes,
-  defaultErrMessage, logFerr,
+  addNotes, addNotesFront, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet,
+  isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
+  defaultErrMessage, testExports, logFerr,
 } from '../src/ferr'
 import {
   hasOp,
@@ -23,7 +23,7 @@ import {
 
 import {
   testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
-  fErrWithCode, fErrWithClientMsg, errInfoWithCode,
+  fErrWithCode, fErrWithClientMsg, errInfoWithCode, fErrWithAll,
   fErrDefaults, fErrDefult, externalExp, errInfoWithOp, fErrWithOp, fErrWithMsgAndNotes, errInfoWithMsg,
   incomingErrInfoWithOp, incomingErrInfoWithCode, incomingErrInfoWithMsg, incomingErrInfoWithClientMsg,
   incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp, incomingErrInfoWithMsgAndNotes,
@@ -40,6 +40,7 @@ const runFerrTests = () => {
     testErrorCreation()
     testErrorCreationWithExternalExceptions()
     testErrorNotes()
+    testErrorOp()
     testErrorMerging()
     testErrorThrowing()
     testErrorPipelines()
@@ -286,7 +287,8 @@ const testErrorNotes = () => {
       { ...fErrDefaults, message }
     )).to.be.true
 
-    // // test note list provided at err creation
+    // test note list provided at err creation
+
     const notes = ['a', 'b']
     expect(makeFerr({ message, notes }).notes).to.deep.equal(notes)
     expect(areEquivErrs(
@@ -295,6 +297,7 @@ const testErrorNotes = () => {
     )).to.be.true
 
     // test single note add
+
     const addedNote = 'c'
     const fErrWithOrigNotes = makeFerr({ message, notes })
     expect(areEquivErrs(
@@ -307,22 +310,53 @@ const testErrorNotes = () => {
       fErrWithAddedNote,
       { ...fErrDefaults, message, notes: [...notes, addedNote] }
     )).to.be.true
+
+    const fErrWithAddedNoteFront = addNotesFront(addedNote, fErrWithOrigNotes)
+    expect(areEquivErrs(
+      fErrWithAddedNoteFront,
+      { ...fErrDefaults, message, notes: [addedNote, ...notes] }
+    )).to.be.true
+
     expect(areEquivErrs(
       fErrWithOrigNotes,
       { ...fErrDefaults, message, notes }
     )).to.be.true // non-mutation check
 
     // test multiple note add
+
     const addedNotes = ['x', 'y', 'z']
     const fErrWithAddedNoteList = addNotes(addedNotes, fErrWithOrigNotes)
     expect(areEquivErrs(
       fErrWithAddedNoteList,
       { ...fErrDefaults, message, notes: [...notes, ...addedNotes] }
     )).to.be.true
+
+    const fErrWithAddedNoteListFront = addNotesFront(addedNotes, fErrWithOrigNotes)
+    expect(areEquivErrs(
+      fErrWithAddedNoteListFront,
+      { ...fErrDefaults, message, notes: [...addedNotes, ...notes] }
+    )).to.be.true
+
     expect(areEquivErrs(
       fErrWithOrigNotes,
       { ...fErrDefaults, message, notes }
     )).to.be.true // non-mutation check
+  })
+}
+
+const testErrorOp = () => {
+  it('should handle error operation changes correcly', async () => {
+    const op = 'updated-op'
+    expect(areEquivErrs(
+      updateOp(op, fErrWithAll),
+      { ...fErrWithAll, op, notes: [fErrWithAll.op, ...fErrWithAll.notes] }
+    )).to.be.true
+
+    // incmoing error not fErr
+    expect(areEquivErrs(
+      updateOp(op, externalExp),
+      makeFerr({ op, externalExp })
+    )).to.be.true
   })
 }
 
@@ -471,6 +505,18 @@ const testErrorThrowing = () => {
       retThrownErr(reThrowWithNotes, 'I mean its really bad', externalExp),
       makeFerr({ message: 'I mean its really bad', notes: ['I mean its really bad'], externalExp })
     )).to.be.true
+  })
+  it('should rethrow with op correctly', async () => {
+    const op = 'thrown-op'
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithOp, op, fErrWithOp),
+      { ...fErrWithOp, op, notes: [fErrWithOp.op, ...fErrWithOp.notes] }
+    )).to.be.true
+    expect(areEquivErrs(
+      retThrownErr(reThrowWithOp, op, externalExp),
+      makeFerr({ op, externalExp })
+    )).to.be.true
+
   })
 }
 

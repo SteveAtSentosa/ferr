@@ -77,6 +77,11 @@ export const addNotes = curry((noteOrNoteList, fErr) => {
   return FE.setNotes(newNoteList, fErr)
 })
 
+export const addNotesFront = curry((noteOrNoteList, fErr) => {
+  const newNoteList = concat(flatArrayify(noteOrNoteList), FE.getNotesOrDef(fErr))
+  return FE.setNotes(newNoteList, fErr)
+})
+
 // Apply a message string or object to an existing fErr
 // '' | { message } -> {fErr} -> {fErr}
 const applyMessageFrom = curry((messageInfoOrStr, fErr) => {
@@ -206,6 +211,18 @@ const fErrToMsgList = (fErr, tabStr='') => {
   return msgList
 }
 
+// sets op for incoming fErr
+// if incoming ferr has an op, that op is moved to notes
+export const updateOp = (op, fErr) => {
+  if (isNotFerr(fErr))
+    return makeFerr({ op, externalExp: fErr })
+
+  const outGoingFerr = FE.hasOp(fErr) ?
+    addNotesFront(FE.getOp(fErr), fErr) : fErr
+
+  return FE.setOp(op, outGoingFerr)
+}
+
 export const fErrStr = fErr => isObject(fErr) ? msgListToStr(fErrToMsgList(fErr)) : ''
 
 // passes fErr through
@@ -239,7 +256,6 @@ export const reThrowWithFerr = curry((existingFerr, incomingErrInfo) => {
 export const reThrowWith = reThrowWithFerr
 export const throwWith = reThrowWithFerr
 
-// TODO: test
 export const reThrowWithNotes = curry((noteOrNoteList, err) => {
   if (isFerr(err))
     throw addNotes(flatArrayify(noteOrNoteList), err)
@@ -250,6 +266,11 @@ export const reThrowWithNotes = curry((noteOrNoteList, err) => {
     externalExp: err
   })
 })
+
+export const reThrowWithOp = curry((op, err) => {
+  throw updateOp(op, err)
+})
+
 
 // TODO: This might be a bit too much ??
 export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => {
