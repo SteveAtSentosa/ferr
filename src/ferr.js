@@ -168,10 +168,13 @@ const mergeErrInfo = (existingFerr, incomingErrInfo) => {
   return targetFerr
 }
 
+const fErrToMessageStr = ({ op = '', message = FE._defaultErrMsg }) =>
+  `${op ? op+':: ' : ''}${message}`
+
+
 const fErrToMsgList = (fErr, tabStr='') => {
   if (isNotObject(fErr)) return []
 
-  // TODO: test this line
   if (isNotFerr(fErr)) {
     return fErr instanceof Error ?
       fErrToMsgList(makeFerr({ externalExp: fErr })) :
@@ -179,11 +182,11 @@ const fErrToMsgList = (fErr, tabStr='') => {
   }
 
   const {
-    op = '',  message = FE._defaultErrMsg, clientMsg = '', code = '', notes = [], externalExp = null
+    clientMsg = '', code = '', notes = [], externalExp = null
   } = fErr
 
-  const msgList = ['\nERROR encountered!']
-  msgList.push(tab(`Msg: ${op ? op+' => ' : ''}${message}`))
+  const msgList = ['\nERROR encountered !!']
+  msgList.push(tab(`Msg: ${fErrToMessageStr(fErr)}`))
   if (clientMsg) msgList.push(tab(`Client msg: ${clientMsg}`))
   if (code) msgList.push(tab(`Code: ${code}`))
   if (notes.length > 0) {
