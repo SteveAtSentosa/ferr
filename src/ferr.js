@@ -168,7 +168,7 @@ const mergeErrInfo = (existingFerr, incomingErrInfo) => {
   return targetFerr
 }
 
-const fErrToMessageStr = ({ op = '', message = FE._defaultErrMsg }) =>
+export const fErrToMessageStr = ({ op = '', message = FE._defaultErrMsg }) =>
   `${op ? op+':: ' : ''}${message}`
 
 
