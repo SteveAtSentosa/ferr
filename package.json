@@ -1,6 +1,6 @@
 {
   "name": "ferr",
-  "version": "2.1.12",
+  "version": "2.1.13",
   "description": "Expressive error handling with a functional focus",
   "main": "lib/ferr.js",
   "keywords": [
