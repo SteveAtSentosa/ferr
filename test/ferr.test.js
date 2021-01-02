@@ -3,7 +3,7 @@ import { expect } from 'chai'
 import {
   addNotes, addNotesFront, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet,
   isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
-  defaultErrMessage, testExports, logFerr,
+  defaultErrMessage, appendErrInfo, updateErrInfo, testExports, logFerr,
 } from '../src/ferr'
 import {
   hasOp,
@@ -23,14 +23,12 @@ import {
 
 import {
   testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
-  fErrWithCode, fErrWithClientMsg, errInfoWithCode, fErrWithAll,
+  fErrWithCode, fErrWithClientMsg, errInfoWithCode, fErrWithAll, errInfoWithCodeAndOp,
   fErrDefaults, fErrDefult, externalExp, errInfoWithOp, fErrWithOp, fErrWithMsgAndNotes, errInfoWithMsg,
   incomingErrInfoWithOp, incomingErrInfoWithCode, incomingErrInfoWithMsg, incomingErrInfoWithClientMsg,
   incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp, incomingErrInfoWithMsgAndNotes,
   incomingErrInfoWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg, errInfoWithNotes, fErrWithNotes
 } from './testData'
-
-const { mergeErrInfo } = testExports
 
 const runFerrTests = () => {
   describe('server tests', () => {
@@ -41,7 +39,8 @@ const runFerrTests = () => {
     testErrorCreationWithExternalExceptions()
     testErrorNotes()
     testErrorOp()
-    testErrorMerging()
+    testErrorAppend()
+    testErrorUpdate()
     testErrorThrowing()
     testErrorPipelines()
   })
@@ -360,63 +359,71 @@ const testErrorOp = () => {
   })
 }
 
-const testErrorMerging = () => {
-  it('should copy over non-existant props for merge', async () => {
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithOp)).to.deep.equal({
+const testErrorAppend = () => {
+  it('should copy over non-existant props for append', async () => {
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithOp)).to.deep.equal({
       ...fErrDefult,
       ...incomingErrInfoWithOp
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithCode)).to.deep.equal({
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithCode)).to.deep.equal({
       ...fErrDefult, ...incomingErrInfoWithCode
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithMsg)).to.deep.equal({
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithMsg)).to.deep.equal({
       ...fErrDefult,
       ...incomingErrInfoWithMsg
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithClientMsg)).to.deep.equal({
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithClientMsg)).to.deep.equal({
       ...fErrDefult,
       ...incomingErrInfoWithClientMsg
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithNotes)).to.deep.equal({
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithNotes)).to.deep.equal({
       ...fErrDefult,
-      ...incomingErrInfoWithNotes
+      ...incomingErrInfoWithNotes,
+      message: incomingErrInfoWithNotes.notes[0]
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithExternaExp)).to.deep.equal({
-      ...fErrDefult, ...incomingErrInfoWithExternaExp
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithExternaExp)).to.deep.equal({
+      ...fErrDefult,
+      ...incomingErrInfoWithExternaExp,
+      message: incomingErrInfoWithExternaExp.externalExp.message
     })
-    expect(mergeErrInfo(fErrDefult, incomingErrInfoWithAll)).to.deep.equal({
-      ...fErrDefult, ...incomingErrInfoWithAll
+    expect(appendErrInfo(fErrDefult, incomingErrInfoWithAll)).to.deep.equal({
+      ...fErrDefult,
+      ...incomingErrInfoWithAll,
+      notes: [
+        ...incomingErrInfoWithAll.notes,
+        incomingErrInfoWithAll.externalExp.message
+      ]
     })
     // test with msg string input
-    expect(mergeErrInfo(fErrDefult, 'string-only-msg')).to.deep.equal({
+    expect(appendErrInfo(fErrDefult, 'string-only-msg')).to.deep.equal({
       ...fErrDefult,
       message: 'string-only-msg'
     })
   })
 
-  it('should merge existing props to message/notes', async () => {
+  it('should append existing props to message/notes', async () => {
     let opStr = `Op: ${incomingErrInfoWithOp.op}`
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithOp, incomingErrInfoWithOp),
+      appendErrInfo(fErrWithOp, incomingErrInfoWithOp),
       { ...fErrWithOp, notes: [opStr] }
     )).to.be.true
 
     let codeStr = `Code: ${incomingErrInfoWithCode.code}`
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithCode, incomingErrInfoWithCode),
+      appendErrInfo(fErrWithCode, incomingErrInfoWithCode),
       { ...fErrWithCode, notes: [`Code: ${incomingErrInfoWithCode.code}`] }
     )).to.be.true
 
     const clientMsgStr = incomingErrInfoWithClientMsg.clientMsg
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithClientMsg, incomingErrInfoWithClientMsg),
+      appendErrInfo(fErrWithClientMsg, incomingErrInfoWithClientMsg),
       { ...fErrWithClientMsg, notes: [clientMsgStr] }
     )).to.be.true
 
     codeStr = `Code: ${incomingErrInfoWithCodeAndOp.code}, `
     opStr = `Op: ${incomingErrInfoWithCodeAndOp.op}`
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOp),
+      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOp),
       { ...fErrWithCodeAndOp, notes: [codeStr + opStr] }
     )).to.be.true
 
@@ -424,12 +431,12 @@ const testErrorMerging = () => {
     opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
     let msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithCodeAndOpAndMsg, incomingErrInfoWithCodeAndOpAndMsg),
+      appendErrInfo(fErrWithCodeAndOpAndMsg, incomingErrInfoWithCodeAndOpAndMsg),
       { ...fErrWithCodeAndOpAndMsg, notes: [codeStr + opStr + msgStr] }
     )).to.be.true
 
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithCodeAndOp, incomingErrInfoWithMsg),
+      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithMsg),
       { ...fErrWithCodeAndOpAndMsg, ...incomingErrInfoWithMsg }
     )).to.be.true
 
@@ -437,19 +444,131 @@ const testErrorMerging = () => {
     opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
     msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
     expect(areEquivErrs(
-      mergeErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg),
+      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg),
       {
         ...fErrWithCodeAndOpAndMsg,
         message: codeStr + opStr + msgStr,
       }
     )).to.be.true
+  })
+}
 
+
+const testErrorUpdate = () => {
+  it('should copy over non-existant props for update', async () => {
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithOp),
+      { ...fErrDefult, ...incomingErrInfoWithOp }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithCode),
+      { ...fErrDefult, ...incomingErrInfoWithCode }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithMsg),
+      {  ...fErrDefult,  ...incomingErrInfoWithMsg }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithClientMsg),
+      { ...fErrDefult, ...incomingErrInfoWithClientMsg }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithNotes), {
+        ...fErrDefult,
+        ...incomingErrInfoWithNotes,
+        message: incomingErrInfoWithNotes.notes[0],
+      }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithExternaExp), {
+        ...fErrDefult,
+        ...incomingErrInfoWithExternaExp,
+        message: incomingErrInfoWithExternaExp.externalExp.message
+      }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, incomingErrInfoWithAll), {
+        ...fErrDefult,
+        ...incomingErrInfoWithAll,
+        notes: [
+          ...incomingErrInfoWithAll.notes,
+          incomingErrInfoWithAll.externalExp.message
+        ]
+      }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrDefult, 'string-only-msg'),
+      { ...fErrDefult, message: 'string-only-msg' }
+    )).to.be.true
   })
 
+  it('should merge existing props to message/notes', async () => {
+    const newOp = { op: 'new-op' }
+    const oldOpStr = `Op: ${fErrWithOp.op}`
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithOp, newOp),
+      { ...makeFerr(newOp), notes: [oldOpStr] }
+    )).to.be.true
 
-  xit('should merge an incoming fErr correctly', async () => {
+    const newCode = { code: 'new-code' }
+    const oldCodeStr = `Code: ${fErrWithCode.code}`
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithCode, newCode),
+      { ...makeFerr(newCode), notes: [oldCodeStr] }
+    )).to.be.true
+
+    const newMsg = { message: 'new-message' }
+    const oldMsgStr = fErrWithMsg.message
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithMsg, newMsg),
+      { ...makeFerr(newMsg), notes: [oldMsgStr] }
+    )).to.be.true
+
+    const newClientMsg = { clientMsg: 'new-client-msg' }
+    const oldClientMsgStr = fErrWithClientMsg.clientMsg
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithClientMsg, newClientMsg),
+      { ...makeFerr(newClientMsg), notes: [oldClientMsgStr] }
+    )).to.be.true
+
+    const newOpAndCode = { ...newOp, ...newCode }
+    const oldCodeAndOpStr = `${oldCodeStr}, ${oldOpStr}`
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithCodeAndOp, newOpAndCode),
+      { ...makeFerr(newOpAndCode), notes: [oldCodeAndOpStr] }
+    )).to.be.true
+
+    const newOpAndCodeAndMsg =  { ...newOp, ...newCode, ...newMsg }
+    const oldCodeAndOpAndMsgStr = `${oldCodeStr}, ${oldOpStr}: ${oldMsgStr}`
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithCodeAndOpAndMsg, newOpAndCodeAndMsg),
+      { ...makeFerr(newOpAndCodeAndMsg), notes: [oldCodeAndOpAndMsgStr] }
+    )).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithCodeAndOp, newMsg),
+      { ...makeFerr({ ...errInfoWithCodeAndOp, ...newMsg }) }
+    )).to.be.true
+
+    // codeStr = `Code: ${incomingErrInfoWithCodeAndOpAndMsg.code}, `
+    // opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
+    // msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
+    expect(areEquivErrs(
+      updateErrInfo(fErrWithCodeAndOp, newOpAndCodeAndMsg),
+      {
+        ...makeFerr(newOpAndCodeAndMsg),
+        notes: [`${oldCodeStr}, ${oldOpStr}`]
+      }
+    )).to.be.true
   })
-
 }
 
 const testErrorThrowing = () => {

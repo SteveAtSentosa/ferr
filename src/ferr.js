@@ -1,8 +1,7 @@
 import { concat, curry, head, propOr, } from 'ramda'
-import { isObject, isString, isArray, isNotObject, isNotString } from 'ramda-adjunct'
+import { isObject, isString, isNotObject } from 'ramda-adjunct'
 import {
-  flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr,
-  isNotObjectOrNonEmptyString, isNonEmptyArray, arrayify
+  flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr, isNonEmptyArray,
 } from './utils'
 // to reexport
 import {
@@ -98,68 +97,69 @@ const applyMessageFrom = curry((messageInfoOrStr, fErr) => {
   return fErrToReturn
 })
 
-// given an existing fErr and incomingErrInfo as one of the following:
+// given primary and secondary incoming info, each as one of the following:
 //   (1) incoming fErr
 //   (2) incoming fErrInfo
 //   (3) incoming external exception
 //   (4) incoming error string
-// A new fErr is returned with incomingErrInfo merged into existingFerr
-// {fErr} -> {fErr} | { errInfo } | 'message' | {exception} -> {fErr}
-const mergeErrInfo = (existingFerr, incomingErrInfo) => {
-
-  if (isNotFerr(existingFerr)) return makeFerr(incomingErrInfo)
-  if (isNotObjectOrNonEmptyString(incomingErrInfo)) return existingFerr
+// Returns a new fErr resulting from merging the two
+// If there is a conflict in errorInfo, the info from primary is retained
+// and the info from secondary is put in notes
+const mergeErrInfo = (primaryErrInfo, secondaryErrInfo, notesFront = false) => {
 
   let noteStr = ''
-  const sourceErrInfo = isString(incomingErrInfo) ? { message: incomingErrInfo } : incomingErrInfo
-  let targetFerr = existingFerr
+  let targetFerr = makeFerr(primaryErrInfo)
+  const sourceErr = makeFerr(secondaryErrInfo)
+  const noteAdder = notesFront ? addNotesFront : addNotes
 
   // copy over code, op, msg if missing, or add to notes if not
 
-  if (FE.hasCode(sourceErrInfo)) {
+  if (FE.hasCode(sourceErr)) {
     if (FE.hasCode(targetFerr))
-      noteStr += `Code: ${FE.getCode(sourceErrInfo)}`
+      noteStr += `Code: ${FE.getCode(sourceErr)}`
     else
-      targetFerr = FE.setCode(FE.getCode(sourceErrInfo), targetFerr)
+      targetFerr = FE.setCode(FE.getCode(sourceErr), targetFerr)
   }
 
-  if (FE.hasOp(sourceErrInfo)) {
+  if (FE.hasOp(sourceErr)) {
     if (FE.hasOp(targetFerr))
-      noteStr += `${noteStr ? ', ' : ''}` + `Op: ${FE.getOp(sourceErrInfo)}`
+      noteStr += `${noteStr ? ', ' : ''}` + `Op: ${FE.getOp(sourceErr)}`
     else
-      targetFerr = FE.setOp(FE.getOp(sourceErrInfo), targetFerr)
-  }
-
-  // copy over clientMsg if missing, or add to notes if not
-  if (FE.hasClientMsg(sourceErrInfo)) {
-    targetFerr = FE.hasClientMsg(targetFerr) ?
-      addNotes(FE.getClientMsg(sourceErrInfo), targetFerr) :
-      FE.setClientMsg(FE.getClientMsg(sourceErrInfo), targetFerr)
+      targetFerr = FE.setOp(FE.getOp(sourceErr), targetFerr)
   }
 
   // if incoming errInfo has a message, adopt it if target does not,
   // or else add to notes
-  if (FE.hasNonDefaultMessage(sourceErrInfo)) {
+  if (FE.hasNonDefaultMessage(sourceErr)) {
     if (FE.hasNonDefaultMessage(targetFerr))
-      noteStr += `${noteStr?': ':''}` +  `${FE.getMessage(sourceErrInfo)}`
+      noteStr += `${noteStr?': ':''}` +  `${FE.getMessage(sourceErr)}`
     else {
       targetFerr = FE.setMessage(
-        noteStr + `${noteStr?': ':''}` + `${FE.getMessage(sourceErrInfo)}`, targetFerr
+        noteStr + `${noteStr?': ':''}` + `${FE.getMessage(sourceErr)}`, targetFerr
       )
       noteStr = ''
     }
   }
+
   // add note string for anything that was not coppied over
   if (noteStr)
-    targetFerr = addNotes(noteStr, targetFerr)
+    targetFerr = noteAdder(noteStr, targetFerr)
+
+  // copy over clientMsg if missing, or add to notes if not
+  if (FE.hasClientMsg(sourceErr)) {
+    targetFerr = FE.hasClientMsg(targetFerr) ?
+      noteAdder(FE.getClientMsg(sourceErr), targetFerr) :
+      FE.setClientMsg(FE.getClientMsg(sourceErr), targetFerr)
+  }
+
 
   // append any incoming notes
-  if (FE.hasNotes(sourceErrInfo))
-    targetFerr = addNotes(FE.getNotes(sourceErrInfo), targetFerr)
+  if (FE.hasNotes(sourceErr))
+    targetFerr = noteAdder(FE.getNotes(sourceErr), targetFerr)
 
   const externalExp =
-    isExternalExp(incomingErrInfo) ? incomingErrInfo :
-    FE.hasExternalExp(incomingErrInfo) ? FE.getExternalExp(incomingErrInfo) :
+    isExternalExp(secondaryErrInfo) ? secondaryErrInfo :
+    FE.hasExternalExp(secondaryErrInfo) ? FE.getExternalExp(secondaryErrInfo) :
     null
 
   if (externalExp && FE.doesNotHaveExternalExp(targetFerr))
@@ -167,6 +167,14 @@ const mergeErrInfo = (existingFerr, incomingErrInfo) => {
 
   return targetFerr
 }
+
+
+export const appendErrInfo = (errInfoOrfErr, errInfoToAppend) =>
+  mergeErrInfo(errInfoOrfErr, errInfoToAppend, false)
+
+export const updateErrInfo = (errInfoOrfErr, errInfoToUpdate) =>
+  mergeErrInfo(errInfoToUpdate, errInfoOrfErr, false)
+
 
 export const fErrToMessageStr = ({ op = '', message = FE._defaultErrMsg }) =>
   `${op ? op+':: ' : ''}${message}`
