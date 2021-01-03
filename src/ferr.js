@@ -194,7 +194,7 @@ export const updateErrInfo = (errInfoOrfErr, errInfoToUpdate) =>
 
 
 export const fErrToMessageStr = ({ op = '', message = FE._defaultErrMsg }) =>
-  `${op ? op+':: ' : ''}${message}`
+  `${op ? op+' - ' : ''}${message}`
 
 
 const fErrToMsgList = (fErr, tabStr='') => {
