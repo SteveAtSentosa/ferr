@@ -273,6 +273,9 @@ const testErrorCreationWithExternalExceptions = () => {
     expect(getMessage(fErr)).to.equal('message')
     expect(getNotes(fErr)).to.deep.equal(['string exp'])
   })
+
+  xit('should incmoing external exceptions correcty', async () => {
+  })
 }
 
 const testErrorNotes = () => {
@@ -485,6 +488,19 @@ const testErrorUpdate = () => {
       }
     )).to.be.true
 
+    const newProps = { ...errInfoWithCodeAndOp, externalExp }
+    const res = makeFerr(newProps)
+    const res2 = updateErrInfo(errInfoWithCodeAndOp, externalExp)
+    // console.log('res: ', res)
+    // console.log('res2: ', res2)
+
+    expect(areEquivErrs(res, res2)).to.be.true
+
+    expect(areEquivErrs(
+      updateErrInfo(errInfoWithCodeAndOp, externalExp),
+      { ...makeFerr(newProps) }
+    )).to.be.true
+
     expect(areEquivErrs(
       updateErrInfo(fErrDefult, incomingErrInfoWithExternaExp), {
         ...fErrDefult,
@@ -640,7 +656,7 @@ const testErrorThrowing = () => {
 }
 
 const testErrorPipelines = () => {
-  it('should throw errors correctly', async () => {
+  it('should rethrow in pipelines correctly', async () => {
     expect(await fPipe(reflect, reflect)(1).catch(reflect)).to.equal(1)
 
     expect(areEquivErrs(

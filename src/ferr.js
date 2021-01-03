@@ -10,6 +10,20 @@ import {
 } from './ferrAccess'
 import * as FE from './ferrAccess'
 
+
+// TODO:
+// For a 2.0 release
+// * A full pass through all code and tess, with the mindset that
+//   err can be fErr, errInfo, errMsg, or Error (external Exp)
+// * Strong test coverage for case when incoming error is Error
+// * Clear concepts and distinction for appendErrInfo vs updateErrInfo
+//   keep currying in mind, as often the 2nd argument will be a
+//   caught incoming exception.
+// * Strong test coverage for both appendErrInfo and updateErrInfo
+// * Complete documentation
+// For a 3.0 release
+// * support fErr as Error object
+
 export const defaultErrMessage = () => FE._defaultErrMsg
 
 const isExternalExp = toCheck =>
@@ -25,13 +39,16 @@ const isExternalExp = toCheck =>
 //   externalExp: any - external exception that was caught
 // }
 // if an fErr is passed in, it is returned directly
-// {errInfo} | 'msg' | {fErr} -> fErr
+// {errInfo} | 'msg' | externalExp | {fErr} -> fErr
 export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
 
   if (isFerr(errInfo)) return errInfo
 
   // create the starting fErr object
-  let fErr = FE.cloneErrInfoWIthDef(isString(errInfo) ? { message: errInfo } : errInfo)
+  let fErr = FE.cloneErrInfoWIthDef(
+    isString(errInfo) ? { message: errInfo } :
+    isExternalExp(errInfo) ? { externalExp: errInfo } :
+    errInfo)
 
   // If notes was passed in as a string
   if (isString(FE.getNotes(errInfo)))
@@ -49,7 +66,7 @@ export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
   )
     fErr = FE.setMessage(head(FE.getNotes(fErr)), fErr)
 
-  const externalExp = FE.getExternalExp(errInfo)
+  const externalExp = FE.getExternalExp(fErr)
   if (externalExp)
     fErr = applyMessageFrom(externalExp, fErr)
 
@@ -261,7 +278,7 @@ export const throwIfOrPassthrough = curry((condition, toThrow, toPassThrough) =>
 })
 
 export const reThrowWithFerr = curry((existingFerr, incomingErrInfo) => {
-  throw mergeErrInfo(makeFerr(existingFerr), incomingErrInfo)
+  throw appendErrInfo(existingFerr, incomingErrInfo)
 })
 
 export const reThrowWith = reThrowWithFerr
@@ -299,5 +316,4 @@ export {
 export const testExports = {
   _tagFErr: FE._tagFErr,
   _defaultErrMsg: FE._defaultErrMsg,
-  mergeErrInfo
 }
