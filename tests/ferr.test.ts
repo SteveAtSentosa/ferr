@@ -67,6 +67,13 @@ describe('FErr class-first API', () => {
     expect(fromObject.cause).to.equal(rawError)
   })
 
+  it('coerces undefined/null/number/array safely', () => {
+    expect(FErr.from(undefined).message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(FErr.from(null).message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(FErr.from(42).message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(FErr.from(['x']).message).to.equal(DEFAULT_FERR_MESSAGE)
+  })
+
   it('supports cause as Error, string, object, and wraps odd primitives safely', () => {
     const errorCause = new Error('err-cause')
     const ferr1 = new FErr({ message: 'm1', cause: errorCause })
@@ -156,6 +163,17 @@ describe('FErr class-first API', () => {
     expect(merged.context).to.deep.equal({ shared: 'existing', a: 1, b: 2 })
   })
 
+  it('handles merge defaults with notes-only incoming payloads', () => {
+    const base = new FErr()
+    const appendResult = base.mergeAppend({ notes: ['n1', 'n2'] })
+    expect(appendResult.message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(appendResult.notes).to.deep.equal(['n1', 'n2'])
+
+    const updateResult = base.mergeUpdate({ notes: ['u1'] })
+    expect(updateResult.message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(updateResult.notes).to.deep.equal(['u1'])
+  })
+
   it('merges with update semantics (incoming wins)', () => {
     const existing = new FErr({
       op: 'existing-op',
@@ -206,6 +224,12 @@ describe('FErr class-first API', () => {
     const ferr = new FErr({ message: 'stack' })
     expect(ferr.stackLines.length > 0).to.be.true
     expect(getStackLines(ferr).length > 0).to.be.true
+  })
+
+  it('supports explicit stackLines override via with(...)', () => {
+    const ferr = new FErr({ message: 'stack-x' })
+    const overridden = ferr.with({ stackLines: ['at fake:1:1', 'at fake:2:2'] })
+    expect(overridden.stackLines).to.deep.equal(['at fake:1:1', 'at fake:2:2'])
   })
 
   it('provides stable toJSON output shape', () => {

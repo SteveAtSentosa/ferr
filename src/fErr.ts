@@ -212,6 +212,7 @@ export class FErr extends Error {
     return mergeAppend(FErr.from(incoming), FErr.from(existing))
   }
 
+  /** @deprecated Use `cause` instead. */
   get externalExp(): FErrCause {
     return this.cause
   }
@@ -317,7 +318,7 @@ export class FErr extends Error {
         lines.push(tab(`Message: ${this.cause.message}`) as string)
         if (isString(this.cause.stack)) {
           lines.push('Cause callstack:')
-          stackStrToArr(this.cause.stack).forEach(line => lines.push(tab(line) as string))
+          stackStrToArr(this.cause.stack).forEach((line: string) => lines.push(tab(line) as string))
         }
       } else {
         lines.push(tab(toJson(this.cause)) as string)
