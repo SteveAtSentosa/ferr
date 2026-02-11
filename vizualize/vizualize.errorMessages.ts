@@ -15,7 +15,7 @@ import { makeFerr, fErrStr } from '../src/ferr'
 
 let fErr = null
 const errInfo = {
-  msg: 'Hey developer, some bad stuff happened',
+  message: 'Hey developer, some bad stuff happened',
   op: 'Operation',
   code: 'ERROR_CODE',
   clientMsg: 'Hey client, that did not work',

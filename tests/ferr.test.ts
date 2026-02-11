@@ -1,9 +1,9 @@
-import { omit, equals, head } from 'ramda'
-import { expect } from 'chai'
+import { omit, equals } from 'ramda'
+import { describe, it, expect } from 'vitest'
 import {
   addNotes, addNotesFront, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet,
   isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
-  defaultErrMessage, appendErrInfo, updateErrInfo, testExports, logFerr,
+  defaultErrMessage, appendErrInfo, updateErrInfo,
 } from '../src/ferr'
 import {
   hasOp,
@@ -274,7 +274,7 @@ const testErrorCreationWithExternalExceptions = () => {
     expect(getNotes(fErr)).to.deep.equal(['string exp'])
   })
 
-  xit('should incmoing external exceptions correcty', async () => {
+  it.skip('should incmoing external exceptions correcty', async () => {
   })
 }
 

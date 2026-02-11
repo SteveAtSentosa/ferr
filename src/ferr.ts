@@ -40,7 +40,7 @@ const isExternalExp = toCheck =>
 // }
 // if an fErr is passed in, it is returned directly
 // {errInfo} | 'msg' | externalExp | {fErr} -> fErr
-export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
+export const makeFerr = (errInfo: any = FE._defaultErrMsg)  => {
 
   if (isFerr(errInfo)) return errInfo
 
@@ -75,7 +75,7 @@ export const makeFerr = (errInfo = FE._defaultErrMsg)  => {
 
 // TODO: add tests
 // return errInfo Objects with supplied values or defaults
-export const makeFerrWithDefaults = (errInfo, errInfoDefaults) =>
+export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) =>
   makeFerr({
     op: errInfo.op || errInfoDefaults.op,
     code: errInfo.code || errInfoDefaults.code,

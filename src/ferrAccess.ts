@@ -1,4 +1,4 @@
-import { complement, propEq, pipe } from 'ramda'
+import { complement, prop, pipe } from 'ramda'
 import { isObject, isString, isNotNil } from 'ramda-adjunct'
 import LG from 'ramda-lens-groups'
 import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil } from './utils'
@@ -64,7 +64,7 @@ export const setExternalExp = LG.set(fErrLg, 'externalExp')
 // if toCheck is object with { message } string prop return the message string
 // if toCheck is a string return it (assuming it is a message string)
 // otherwise return null
-export const extractMessage = toCheck =>
+export const extractMessage = (toCheck?: any) =>
   isString(toCheck) ? toCheck :
   hasMessage(toCheck) ? getMessage(toCheck) :
   null
@@ -76,7 +76,8 @@ export const hasNonDefaultMessage = toCheck =>
 export const doesNotHaveNonDefaultMessage = complement(hasNonDefaultMessage)
 
 
-export const isFerr = toCheck => isObject(toCheck) && propEq('_tag', _tagFErr, toCheck)
+export const isFerr = toCheck =>
+  isObject(toCheck) && prop('_tag', toCheck) === _tagFErr
 export const isNotFerr = complement(isFerr)
 
 export const isFerrOrString = toCheck => (isFerr(toCheck) || isString(toCheck))

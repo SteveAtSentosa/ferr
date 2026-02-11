@@ -4,8 +4,8 @@
 // put in own rep futils
 
 import {
-  flatten, drop, concat, not, any, complement, has, propEq, prop,
-  reverse, assoc, curry, head
+  flatten, drop, concat, not, any, complement, has, prop,
+  assoc, curry, head
 } from 'ramda'
 import {
   isArray, isString, isNotObject, isNilOrEmpty, isNotNil
@@ -52,7 +52,7 @@ export const applyAsync = (acc, val) => acc.then(val)
 // handles pipeline of any combination of sync and asyn functions
 // Always returns a promise, even if all fxns are async
 // This allows .catch to be used in all pipelines
-export const fPipe = (...funcs) => x => funcs.reduce(applyAsync, Promise.resolve(x))
+export const fPipe = (...funcs: any[]) => (x?: any) => funcs.reduce(applyAsync, Promise.resolve(x))
 
 // ----- the line --------------------------------------------------
 
@@ -105,7 +105,7 @@ export const propIsNotNilOrEmpty = complement(propIsNilOrEmpty)
 // add [propName]: propval to it return true if prop added, false if not
 // mutating obj, because it is likely an Error object, and we don't want to loose all the class junk
 export const addPropIfMissingOrEq = (propName, valToCheckAtainst, newPropVal, obj) => {
-  if (doesNotHave(propName, obj) || propEq(propName, valToCheckAtainst, obj)) {
+  if (doesNotHave(propName, obj) || prop(propName, obj) === valToCheckAtainst) {
     obj[propName] = newPropVal
     return true
   }
@@ -114,8 +114,10 @@ export const addPropIfMissingOrEq = (propName, valToCheckAtainst, newPropVal, ob
 
 // given a string or array of strings, prepended with the specified tab
 // (['']|'', '') -> [''] | ''
-export const tab = (tabMe='', tab='  ') => {
-  if (isStringArray(tabMe)) return tabMe.map(str => `${tab}${str}`)
+export function tab(tabMe: string, tab?: string): string
+export function tab(tabMe: string[], tab?: string): string[]
+export function tab(tabMe: any = '', tab='  ') {
+  if (isStringArray(tabMe)) return tabMe.map((str: string) => `${tab}${str}`)
   else if (isString(tabMe)) return `${tab}${tabMe}`
   else return tabMe
 }
@@ -133,6 +135,3 @@ export const stackStrToArr = stackStr =>
 
 export const stackArrToStr = (msg, stackArr) =>
   msgListToStr(stackArr, `Error: ${msg}\n`, '    ')
-
-
-
