@@ -41,6 +41,7 @@ const runFerrTests = () => {
     testErrorAppend()
     testErrorUpdate()
     testErrorThrowing()
+    testErrorClassInterop()
     testErrorPipelines()
   })
 }
@@ -729,6 +730,75 @@ const testErrorPipelines = () => {
       ferr1,
       { ...fErrWithCodeAndOpAndMsg, notes: [externalExp.message], externalExp }
     )).to.be.true
+  })
+}
+
+const testErrorClassInterop = () => {
+  it('should interop cleanly with Error in try/catch flows', async () => {
+    let caughtErr: any = null
+
+    try {
+      throwFerr({ op: 'interop-op', code: 'INTEROP', message: 'interop-message' })
+    } catch (e) {
+      caughtErr = e
+    }
+
+    expect(caughtErr instanceof Error).to.be.true
+    expect(caughtErr instanceof FErr).to.be.true
+    expect(isFerr(caughtErr)).to.be.true
+    expect(caughtErr.name).to.equal('FErr')
+    expect(caughtErr.message).to.equal('interop-message')
+  })
+
+  it('should rethrow caught external Error as FErr while preserving external exception', async () => {
+    let caughtErr: any = null
+
+    try {
+      try {
+        throw new Error('low-level-error')
+      } catch (e) {
+        reThrowWithFerr({ op: 'service-op', code: 'SERVICE' }, e)
+      }
+    } catch (e) {
+      caughtErr = e
+    }
+
+    expect(caughtErr instanceof Error).to.be.true
+    expect(caughtErr instanceof FErr).to.be.true
+    expect(caughtErr.externalExp instanceof Error).to.be.true
+    expect(caughtErr.externalExp.message).to.equal('low-level-error')
+    expect(caughtErr.code).to.equal('SERVICE')
+    expect(caughtErr.op).to.equal('service-op')
+  })
+
+  it('should convert raw Error into FErr via makeFerr', async () => {
+    const ferrFromError = makeFerr(new Error('raw-conversion-error'))
+
+    expect(ferrFromError instanceof Error).to.be.true
+    expect(ferrFromError instanceof FErr).to.be.true
+    expect(isFerr(ferrFromError)).to.be.true
+    expect(getMessage(ferrFromError)).to.equal('raw-conversion-error')
+    expect(ferrFromError.externalExp instanceof Error).to.be.true
+  })
+
+  it('should keep thrown values catchable as Error after reThrowWithNotes', async () => {
+    let caughtErr: any = null
+
+    try {
+      try {
+        throw new Error('external-before-notes')
+      } catch (e) {
+        reThrowWithNotes(['added-note'], e)
+      }
+    } catch (e) {
+      caughtErr = e
+    }
+
+    expect(caughtErr instanceof Error).to.be.true
+    expect(caughtErr instanceof FErr).to.be.true
+    expect(getNotes(caughtErr)).to.deep.equal(['added-note', 'external-before-notes'])
+    expect(caughtErr.externalExp instanceof Error).to.be.true
+    expect(caughtErr.externalExp.message).to.equal('external-before-notes')
   })
 }
 
