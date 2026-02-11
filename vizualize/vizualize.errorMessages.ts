@@ -1,4 +1,3 @@
-import { omit } from 'ramda'
 import { makeFerr, fErrStr } from '../src/ferr'
 
 
@@ -29,7 +28,9 @@ fErr = makeFerr('An string only fErr error message')
 console.log(fErrStr(fErr))
 
 console.log('\n... fErr without exception\n')
-fErr = makeFerr(omit(['externalExp'], errInfo))
+const errInfoWithoutExternalExp = { ...errInfo }
+delete errInfoWithoutExternalExp.externalExp
+fErr = makeFerr(errInfoWithoutExternalExp)
 console.log(fErrStr(fErr))
 
 console.log('\n... fErr with exception\n')

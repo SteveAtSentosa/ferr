@@ -1,8 +1,8 @@
-import { concat, curry, head, propOr, } from 'ramda'
-import { isObject, isString, isNotObject } from 'ramda-adjunct'
+import { pipe } from 'remeda'
 import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr, isNonEmptyArray,
 } from './utils'
+import { curryLast } from './stcline'
 // to reexport
 import {
   isFerr,
@@ -25,6 +25,12 @@ import * as FE from './ferrAccess'
 // * support fErr as Error object
 
 export const defaultErrMessage = () => FE._defaultErrMsg
+
+const isObject = (toCheck: any) =>
+  typeof toCheck === 'object' && toCheck !== null && !Array.isArray(toCheck)
+
+const isString = (toCheck: any) => typeof toCheck === 'string'
+const isNotObject = (toCheck: any) => !isObject(toCheck)
 
 const isExternalExp = toCheck =>
   isNotFerr(toCheck) && FE.hasMessage(toCheck) && FE.hasStack(toCheck)
@@ -64,7 +70,7 @@ export const makeFerr = (errInfo: any = FE._defaultErrMsg)  => {
     FE.doesNotHaveNonDefaultMessage(fErr) &&
     isNonEmptyArray(FE.getNotes(fErr))
   )
-    fErr = FE.setMessage(head(FE.getNotes(fErr)), fErr)
+    fErr = FE.setMessage(FE.getNotes(fErr)[0], fErr)
 
   const externalExp = FE.getExternalExp(fErr)
   if (externalExp)
@@ -92,19 +98,19 @@ export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) => {
 
 // Return an fErr derived from original fErr, with notes added
 // '' | [''] -> fErr -> fErr
-export const addNotes = curry((noteOrNoteList, fErr) => {
-  const newNoteList = concat(FE.getNotesOrDef(fErr), flatArrayify(noteOrNoteList))
+export const addNotes = curryLast((noteOrNoteList, fErr) => {
+  const newNoteList = [...FE.getNotesOrDef(fErr), ...flatArrayify(noteOrNoteList)]
   return FE.setNotes(newNoteList, fErr)
 })
 
-export const addNotesFront = curry((noteOrNoteList, fErr) => {
-  const newNoteList = concat(flatArrayify(noteOrNoteList), FE.getNotesOrDef(fErr))
+export const addNotesFront = curryLast((noteOrNoteList, fErr) => {
+  const newNoteList = [...flatArrayify(noteOrNoteList), ...FE.getNotesOrDef(fErr)]
   return FE.setNotes(newNoteList, fErr)
 })
 
 // Apply a message string or object to an existing fErr
 // '' | { message } -> {fErr} -> {fErr}
-const applyMessageFrom = curry((messageInfoOrStr, fErr) => {
+const applyMessageFrom = curryLast((messageInfoOrStr, fErr) => {
 
   if (FE.isNotFerrOrString(fErr)) return fErr
   let fErrToReturn = makeFerr(fErr)
@@ -224,7 +230,8 @@ const fErrToMsgList = (fErr, tabStr='') => {
   }
 
   msgList.push('Call Stack:')
-  propOr([], 'stack', fErr).forEach(line => msgList.push(tab(line)))
+  ;
+  (fErr?.stack ?? []).forEach(line => msgList.push(tab(line)))
 
   const e = externalExp
   if (e) {
@@ -259,7 +266,7 @@ export const fErrStr = fErr => isObject(fErr) ? msgListToStr(fErrToMsgList(fErr)
 
 // passes fErr through
 export const logFerr = fErr => {
-  console.log(fErrStr(fErr) + '\n')
+  pipe(fErr, fErrStr, msg => console.log(msg + '\n'))
   return fErr
 }
 
@@ -276,19 +283,19 @@ export const throwIf = (condition, toThrow) => {
 
 // throws toThrow if condition is true,
 // otherwise returns toPassThrough
-export const throwIfOrPassthrough = curry((condition, toThrow, toPassThrough) => {
+export const throwIfOrPassthrough = curryLast((condition, toThrow, toPassThrough) => {
   if (condition) throw toThrow
   return toPassThrough
 })
 
-export const reThrowWithFerr = curry((existingFerr, incomingErrInfo) => {
+export const reThrowWithFerr = curryLast((existingFerr, incomingErrInfo) => {
   throw appendErrInfo(existingFerr, incomingErrInfo)
 })
 
 export const reThrowWith = reThrowWithFerr
 export const throwWith = reThrowWithFerr
 
-export const reThrowWithNotes = curry((noteOrNoteList, err) => {
+export const reThrowWithNotes = curryLast((noteOrNoteList, err) => {
   if (isFerr(err))
     throw addNotes(flatArrayify(noteOrNoteList), err)
 
@@ -299,7 +306,7 @@ export const reThrowWithNotes = curry((noteOrNoteList, err) => {
   })
 })
 
-export const reThrowWithOp = curry((op, err) => {
+export const reThrowWithOp = curryLast((op, err) => {
   throw updateOp(op, err)
 })
 

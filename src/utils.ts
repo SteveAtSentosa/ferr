@@ -3,42 +3,47 @@
 // test these please
 // put in own rep futils
 
-import {
-  flatten, drop, concat, not, any, complement, has, prop,
-  curry, head
-} from 'ramda'
-import {
-  isArray, isString, isNotObject, isNilOrEmpty, isNotNil
-} from 'ramda-adjunct'
+import { curryLast } from './stcline'
 
-export const arrayify = input => isArray(input) ? input : [input]
-export const flatArrayify = input => flatten(arrayify(input))
+const hasOwn = (obj: any, propName: string) =>
+  obj !== null &&
+  obj !== undefined &&
+  Object.prototype.hasOwnProperty.call(obj, propName)
+
+const getProp = (obj: any, propName: string) =>
+  obj === null || obj === undefined ? undefined : obj[propName]
+
+const complement = (pred: (...args: any[]) => boolean) =>
+  (...args: any[]) => !pred(...args)
+
+export const arrayify = input => Array.isArray(input) ? input : [input]
+export const flatArrayify = input => arrayify(input).flat(Infinity)
 
 // if toCheck is an array, return first element, otherwise return toCheck
 export const headOrReflect = toCheck =>
-  isArray(toCheck) ? head(toCheck) : toCheck
+  Array.isArray(toCheck) ? toCheck[0] : toCheck
 
-export const doesNotHave = complement(has)
+export const doesNotHave = (propName, obj) => !hasOwn(obj, propName)
 
-export const isNonEmptyString = toCheck => isString(toCheck) && toCheck.length > 0
+export const isNonEmptyString = toCheck => typeof toCheck === 'string' && toCheck.length > 0
 export const isNotNonEmptyString = complement(isNonEmptyString)
-export const propIsNonEmptyString = curry((propName, obj) => isNonEmptyString(prop(propName, obj)))
+export const propIsNonEmptyString = curryLast((propName, obj) => isNonEmptyString(getProp(obj, propName)))
 
-export const isNonEmptyArray = toCheck => isArray(toCheck) && toCheck.length > 0
-export const propIsNonEmptyArray = curry((propName, obj) => isNonEmptyArray(prop(propName, obj)))
+export const isNonEmptyArray = toCheck => Array.isArray(toCheck) && toCheck.length > 0
+export const propIsNonEmptyArray = curryLast((propName, obj) => isNonEmptyArray(getProp(obj, propName)))
 
-export const propIsNotNil = curry((propName, obj) => isNotNil(prop(propName, obj)))
+export const propIsNotNil = curryLast((propName, obj) => getProp(obj, propName) !== undefined && getProp(obj, propName) !== null)
 // export const isNotNonEmptyString = complement(isNonEmptyString)
 
 export const isNotObjectOrNonEmptyString = toCheck =>
-  isNotObject(toCheck) && isNotNonEmptyString(toCheck)
+  (typeof toCheck !== 'object' || toCheck === null || Array.isArray(toCheck)) && isNotNonEmptyString(toCheck)
 
 // export const propIsNonEmptyArray = (propName, obj) =>
 
 
 export const stackStrToStackArr = stackStr =>
   // drop error message and this call from stack list
-  drop(2, stackStr.split('\n').map(s => s.trim()))
+  stackStr.split('\n').map(s => s.trim()).slice(2)
 
 export const retThrownErr = (fxnThatThrows, ...argsForFxnThatThrows) => {
   try { fxnThatThrows(...argsForFxnThatThrows); return null } catch (e) { return e }
@@ -57,7 +62,7 @@ export const fPipe = (...funcs: any[]) => (x?: any) => funcs.reduce(applyAsync, 
 // ----- the line --------------------------------------------------
 
 export const copyProp = (propName, sourceObj={}, targetObj={}) =>
-  has(propName, sourceObj) ? { ...targetObj, [propName]: sourceObj[propName] } : targetObj
+  hasOwn(sourceObj, propName) ? { ...targetObj, [propName]: sourceObj[propName] } : targetObj
 
 export const plainObject = classInstance => Object.assign({}, classInstance)
 
@@ -65,14 +70,21 @@ export const plainObject = classInstance => Object.assign({}, classInstance)
 // Given the predicate fxn `checkPred`, check that all elements of `array` pass
 // ((a->bool), a) -> boolean
 export const isArrayOf = (typeCheckPred, array) =>
-  isArray(array) && not(any(complement(typeCheckPred), array))
+  Array.isArray(array) && !array.some(v => !typeCheckPred(v))
 
-export const isStringArray = array => isArrayOf(isString, array)
+export const isStringArray = array => isArrayOf((v: any) => typeof v === 'string', array)
 export const isNotStringArray = complement(isStringArray)
 
 // export const doesNotHave = complement(has)
 
-export const propIsNilOrEmpty = (propName, obj) => isNilOrEmpty(prop(propName, obj))
+const isNilOrEmpty = toCheck =>
+  toCheck === undefined ||
+  toCheck === null ||
+  (typeof toCheck === 'string' && toCheck.length === 0) ||
+  (Array.isArray(toCheck) && toCheck.length === 0) ||
+  (typeof toCheck === 'object' && !Array.isArray(toCheck) && Object.keys(toCheck).length === 0)
+
+export const propIsNilOrEmpty = (propName, obj) => isNilOrEmpty(getProp(obj, propName))
 export const propIsNotNilOrEmpty = complement(propIsNilOrEmpty)
 
 // TODO: obsolete (add non mutating version that handles class to common lib)
@@ -105,7 +117,7 @@ export const propIsNotNilOrEmpty = complement(propIsNilOrEmpty)
 // add [propName]: propval to it return true if prop added, false if not
 // mutating obj, because it is likely an Error object, and we don't want to loose all the class junk
 export const addPropIfMissingOrEq = (propName, valToCheckAtainst, newPropVal, obj) => {
-  if (doesNotHave(propName, obj) || prop(propName, obj) === valToCheckAtainst) {
+  if (doesNotHave(propName, obj) || getProp(obj, propName) === valToCheckAtainst) {
     obj[propName] = newPropVal
     return true
   }
@@ -118,20 +130,20 @@ export function tab(tabMe: string, tab?: string): string
 export function tab(tabMe: string[], tab?: string): string[]
 export function tab(tabMe: any = '', tab='  ') {
   if (isStringArray(tabMe)) return tabMe.map((str: string) => `${tab}${str}`)
-  else if (isString(tabMe)) return `${tab}${tabMe}`
+  else if (typeof tabMe === 'string') return `${tab}${tabMe}`
   else return tabMe
 }
 
 export const msgListToStr = (msgList, appendTo='', pre='') => {
   const strings = arrayify(msgList)
   if (isNotStringArray(strings)) return appendTo
-  return msgList.reduce((acc, cur, i) =>
-    concat(acc, `${pre}${cur}${i<strings.length-1?'\n':''}`), appendTo/* appendTo?`${appendTo}\n`:''*/)
+  return strings.reduce((acc, cur, i) =>
+    `${acc}${pre}${cur}${i<strings.length-1?'\n':''}`, appendTo)
 }
 
 export const stackStrToArr = stackStr =>
   // drop error message from stack list
-  drop(1, stackStr.split('\n').map(s => s.trim()))
+  stackStr.split('\n').map(s => s.trim()).slice(1)
 
 export const stackArrToStr = (msg, stackArr) =>
   msgListToStr(stackArr, `Error: ${msg}\n`, '    ')

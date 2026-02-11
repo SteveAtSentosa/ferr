@@ -8,15 +8,9 @@ importers:
 
   .:
     dependencies:
-      ramda:
-        specifier: ^0.32.0
-        version: 0.32.0
-      ramda-adjunct:
-        specifier: ^6.0.0
-        version: 6.0.0(ramda@0.32.0)
-      ramda-lens-groups:
-        specifier: ^2.1.0
-        version: 2.1.0
+      remeda:
+        specifier: ^2.32.0
+        version: 2.33.6
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -862,30 +856,12 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  ramda-adjunct@3.4.0:
-    resolution: {integrity: sha512-qKRgqwZzJUZmPJfGK8/uLVxQXkiftKhW6FW9NUCUlQrzsBUZBvFAZUxwH7nTRwDMg+ChRU69rVVuS/4EUgtuIg==}
-    engines: {node: '>=0.10.3'}
-    peerDependencies:
-      ramda: '>= 0.28.0 <= 0.28.0'
-
-  ramda-adjunct@6.0.0:
-    resolution: {integrity: sha512-mdGCk0Gj3nQQ7lJ2XfuOFsc3GtfAn5jJWcQ/FuEPvP8E+gaXQ+z+3y/HtKGoYkrOWgE645VCdK54GNvKkXYQlw==}
-    engines: {node: '>=0.10.3'}
-    peerDependencies:
-      ramda: '>= 0.32.0'
-
-  ramda-lens-groups@2.1.0:
-    resolution: {integrity: sha512-8YyBw5s4FXpahs9CKBOw59+gDDck2CUO6fC68hsKV7+1jU46/jgF4t9LIFskD+/hjC+zSXazyKxaI0VJPzLFqA==}
-
-  ramda@0.28.0:
-    resolution: {integrity: sha512-9QnLuG/kPVgWvMQ4aODhsBUFKOUmnbUnsSXACv+NCQZcHbeb+v8Lodp8OVxtRULN1/xOyYLLaL6npE6dMq5QTA==}
-
-  ramda@0.32.0:
-    resolution: {integrity: sha512-GQWAHhxhxWBWA8oIBr1XahFVjQ9Fic6MK9ikijfd4TZHfE2+urfk+irVlR5VOn48uwMgM+loRRBJd6Yjsbc0zQ==}
-
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
+
+  remeda@2.33.6:
+    resolution: {integrity: sha512-tazDGH7s75kUPGBKLvhgBEHMgW+TdDFhjUAMdQj57IoWz6HsGa5D2RX5yDUz6IIqiRRvZiaEHzCzWdTeixc/Kg==}
 
   resolve-from@5.0.0:
     resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
@@ -1810,24 +1786,9 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  ramda-adjunct@3.4.0(ramda@0.28.0):
-    dependencies:
-      ramda: 0.28.0
-
-  ramda-adjunct@6.0.0(ramda@0.32.0):
-    dependencies:
-      ramda: 0.32.0
-
-  ramda-lens-groups@2.1.0:
-    dependencies:
-      ramda: 0.28.0
-      ramda-adjunct: 3.4.0(ramda@0.28.0)
-
-  ramda@0.28.0: {}
-
-  ramda@0.32.0: {}
-
   readdirp@4.1.2: {}
+
+  remeda@2.33.6: {}
 
   resolve-from@5.0.0: {}
 

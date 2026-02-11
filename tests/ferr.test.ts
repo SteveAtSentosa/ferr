@@ -1,4 +1,3 @@
-import { omit, equals } from 'ramda'
 import { describe, it, expect } from 'vitest'
 import {
   addNotes, addNotesFront, makeFerr, makeFerrWithDefaults, throwFerr, throwFerrIf, throwErrIfOrRet,
@@ -47,13 +46,14 @@ const runFerrTests = () => {
 }
 
 // we will skip stack comparisons
-const omitStack = omit(['stack'])
+const omitStack = fErr => {
+  if (!fErr || typeof fErr !== 'object') return fErr
+  const { stack, ...rest } = fErr
+  return rest
+}
 const areEquivErrs = (fErr1, fErr2) => {
-  const areEquiv = equals(omitStack(fErr1), omitStack(fErr2))
-  // so that we can get a print out of the diff
-  if (!areEquiv)
-    expect(omitStack(fErr1)).to.deep.equal(omitStack(fErr2))
-  return areEquiv
+  expect(omitStack(fErr1)).to.deep.equal(omitStack(fErr2))
+  return true
 }
 
 const testUtils = () => {
@@ -293,7 +293,27 @@ const testErrorCreationWithExternalExceptions = () => {
     expect(getNotes(fErr)).to.deep.equal(['string exp'])
   })
 
-  it.skip('should incmoing external exceptions correcty', async () => {
+  it('should incmoing external exceptions correcty', async () => {
+    const base = makeFerr()
+
+    const appended = appendErrInfo(base, externalExp)
+    expect(getMessage(appended)).to.equal(externalExp.message)
+    expect(appended.externalExp).to.equal(externalExp)
+
+    const updated = updateErrInfo(base, externalExp)
+    expect(getMessage(updated)).to.equal(externalExp.message)
+    expect(updated.externalExp).to.equal(externalExp)
+
+    const withExistingMessage = makeFerr({ message: 'keep' })
+    const appendedWithExistingMessage = appendErrInfo(withExistingMessage, externalExp)
+    expect(getMessage(appendedWithExistingMessage)).to.equal('keep')
+    expect(getNotes(appendedWithExistingMessage)).to.deep.equal([externalExp.message])
+    expect(appendedWithExistingMessage.externalExp).to.equal(externalExp)
+
+    const updatedWithExistingMessage = updateErrInfo(withExistingMessage, externalExp)
+    expect(getMessage(updatedWithExistingMessage)).to.equal(externalExp.message)
+    expect(getNotes(updatedWithExistingMessage)).to.deep.equal(['keep'])
+    expect(updatedWithExistingMessage.externalExp).to.equal(externalExp)
   })
 }
 
