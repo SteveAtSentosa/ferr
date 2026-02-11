@@ -1,4 +1,4 @@
-import { makeFerr, fErrStr } from '../src/ferr'
+import { makeFerr, fErrStr } from '../src/ferr.ts'
 
 
 // return an Error object given with the additional props in errInfo added, and message set to msg
