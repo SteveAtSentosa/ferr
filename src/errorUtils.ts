@@ -1,4 +1,4 @@
-import { DEFAULT_FERR_MESSAGE, FErr, type FErrOptions } from './fErr'
+import { DEFAULT_FERR_MESSAGE, FErr, type FErrCause, type FErrOptions } from './fErr'
 import { toJson } from './ferrUtils'
 
 export interface ThrowOptions {
@@ -6,7 +6,7 @@ export interface ThrowOptions {
   code?: string
   clientMsg?: string
   context?: unknown
-  cause?: unknown
+  cause?: FErrCause | unknown
   notes?: string | string[]
 }
 

@@ -67,6 +67,41 @@ describe('FErr class-first API', () => {
     expect(fromObject.cause).to.equal(rawError)
   })
 
+  it('supports cause as Error, string, object, and wraps odd primitives safely', () => {
+    const errorCause = new Error('err-cause')
+    const ferr1 = new FErr({ message: 'm1', cause: errorCause })
+    expect(ferr1.cause).to.equal(errorCause)
+
+    const ferr2 = new FErr({ message: 'm2', cause: 'string-cause' })
+    expect(ferr2.cause).to.equal('string-cause')
+
+    const ferr3 = new FErr({ message: 'm3', cause: { kind: 'obj-cause' } })
+    expect(ferr3.cause).to.deep.equal({ kind: 'obj-cause' })
+
+    const ferr4 = new FErr({ message: 'm4', cause: 404 as any })
+    expect(ferr4.cause).to.deep.equal({ value: 404 })
+  })
+
+  it('exposes getCauseMessage() for consistent message extraction', () => {
+    expect(new FErr({ message: 'x', cause: new Error('boom') }).getCauseMessage()).to.equal('boom')
+    expect(new FErr({ message: 'x', cause: 'boom-str' }).getCauseMessage()).to.equal('boom-str')
+    expect(new FErr({ message: 'x', cause: { message: 'boom-obj' } }).getCauseMessage()).to.equal('boom-obj')
+    expect(new FErr({ message: 'x', cause: { foo: 1 } }).getCauseMessage()).to.equal(null)
+  })
+
+  it('applies explicit FErr.from message/cause precedence rules', () => {
+    const fromDefault = FErr.from({ cause: 'cause-msg' })
+    expect(fromDefault.message).to.equal('cause-msg')
+
+    const fromNonDefault = FErr.from({ message: 'base-msg', cause: 'cause-msg' })
+    expect(fromNonDefault.message).to.equal('base-msg')
+    expect(fromNonDefault.notes).to.include('cause-msg')
+
+    const fromSame = FErr.from({ message: 'same-msg', cause: 'same-msg' })
+    expect(fromSame.message).to.equal('same-msg')
+    expect(fromSame.notes).to.deep.equal([])
+  })
+
   it('keeps Error interop', () => {
     const ferr = new FErr({ message: 'interop' })
     expect(ferr instanceof Error).to.be.true

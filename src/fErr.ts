@@ -3,6 +3,7 @@ import { msgListToStr, stackStrToArr, tab, toJson } from './ferrUtils'
 export const DEFAULT_FERR_MESSAGE = 'unknown error'
 
 export type FErrNotesInput = string | string[]
+export type FErrCause = Error | string | Record<string, unknown> | null
 
 export interface FErrOptions {
   message?: string
@@ -11,7 +12,7 @@ export interface FErrOptions {
   clientMsg?: string
   notes?: FErrNotesInput
   context?: unknown
-  cause?: unknown
+  cause?: FErrCause | unknown
   stackLines?: string[]
 }
 
@@ -40,9 +41,16 @@ const toStackLines = (value: unknown): string[] => {
   return []
 }
 
+const normalizeCause = (value: unknown): FErrCause => {
+  if (isNil(value)) return null
+  if (value instanceof Error || isString(value)) return value
+  if (isRecord(value)) return value
+  return { value }
+}
+
 const nonDefaultMessage = (message: string): boolean => message !== DEFAULT_FERR_MESSAGE
 
-const messageFromUnknown = (input: unknown): string | null => {
+const messageFromCause = (input: FErrCause): string | null => {
   if (isString(input)) return input
   if (input instanceof Error) return input.message || DEFAULT_FERR_MESSAGE
   if (isRecord(input) && isString(input.message)) return input.message
@@ -137,7 +145,7 @@ export class FErr extends Error {
   readonly clientMsg: string
   readonly notes: string[]
   readonly context: unknown
-  override readonly cause: unknown
+  override readonly cause: FErrCause
   readonly stackLines: string[]
 
   constructor(options: FErrOptions = {}) {
@@ -157,7 +165,7 @@ export class FErr extends Error {
     this.clientMsg = isString(options.clientMsg) ? options.clientMsg : ''
     this.notes = toNoteList(options.notes)
     this.context = isNil(options.context) ? null : options.context
-    this.cause = isNil(options.cause) ? null : options.cause
+    this.cause = normalizeCause(options.cause)
 
     this.stackLines =
       toStackLines(options.stackLines).length > 0 ? toStackLines(options.stackLines) :
@@ -170,6 +178,10 @@ export class FErr extends Error {
     return value instanceof FErr
   }
 
+  // Coercion rules:
+  // - If message is default and cause has a message/string, adopt it.
+  // - If message is non-default and cause has a different message/string, append it to notes.
+  // - Raw string cause is intentionally supported and treated as a valid cause message.
   static from(input: unknown, overrides: Partial<FErrOptions> = {}): FErr {
     const base = normalizeOptionsFromUnknown(input)
     const merged: FErrOptions = {
@@ -180,7 +192,7 @@ export class FErr extends Error {
     }
 
     const ferr = new FErr(merged)
-    const incomingMessage = messageFromUnknown(ferr.cause)
+    const incomingMessage = messageFromCause(ferr.cause)
     if (!incomingMessage) return ferr
 
     if (!nonDefaultMessage(ferr.message))
@@ -200,8 +212,12 @@ export class FErr extends Error {
     return mergeAppend(FErr.from(incoming), FErr.from(existing))
   }
 
-  get externalExp(): unknown {
+  get externalExp(): FErrCause {
     return this.cause
+  }
+
+  getCauseMessage(): string | null {
+    return messageFromCause(this.cause)
   }
 
   toOptions(): FErrOptions {
