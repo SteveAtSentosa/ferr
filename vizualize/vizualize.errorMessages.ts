@@ -1,28 +1,20 @@
+import { FErr } from '../src/fErr.ts'
 import {
-  addNotes,
-  addNotesFront,
-  appendErrInfo,
-  fErrStr,
-  fErrToMessageStr,
-  makeFerr,
-  makeFerrWithDefaults,
-  reThrowWithFerr,
-  reThrowWithNotes,
-  reThrowWithOp,
-  throwErrIfOrRet,
+  rethrowAppend,
+  rethrowUpdate,
+  throwErr,
+  throwErrIf,
+  throwFerr,
   throwFerrIf,
-  throwIfOrPassthrough,
-  updateErrInfo,
-  updateOp
-} from '../src/ferr.ts'
+} from '../src/errorUtils.ts'
 
 const printSection = (title: string) => {
   console.log(`\n=== ${title} ===\n`)
 }
 
-const printFerr = (label: string, fErr: any) => {
+const printFerr = (label: string, ferr: unknown) => {
   console.log(`\n--- ${label} ---`)
-  console.log(fErrStr(fErr))
+  console.log(FErr.from(ferr).toDetailedString())
 }
 
 const caught = (fn: () => any) => {
@@ -33,116 +25,74 @@ const caught = (fn: () => any) => {
   }
 }
 
-const externalExp = new Error('exception, this could be bad')
-const baseErrInfo = {
-  message: 'Hey developer, some bad stuff happened',
-  op: 'Operation',
-  code: 'ERROR_CODE',
-  clientMsg: 'Hey client, that did not work',
-  notes: ['you probably should grab a beer', 'I would reccomend a nice IPA'],
-  externalExp
-}
-
 printSection('Basic Creation')
-printFerr('string-only makeFerr', makeFerr('An string only fErr error message'))
-printFerr('makeFerr without external exception', makeFerr({
-  ...baseErrInfo,
-  externalExp: null
-}))
-printFerr('makeFerr with external exception', makeFerr(baseErrInfo))
-printFerr('makeFerr with notes-only input (message inferred)', makeFerr({
-  notes: ['First note becomes message', 'second note']
-}))
+printFerr('new FErr defaults', new FErr())
+printFerr('FErr.from string', FErr.from('string-only message'))
+printFerr('FErr.from raw Error', FErr.from(new Error('raw-error')))
 
-printSection('Note Behavior')
-const ferrForNotes = makeFerr({ message: 'base message', notes: ['existing note'] })
-printFerr('addNotes appends', addNotes(['n2', 'n3'], ferrForNotes))
-printFerr('addNotesFront prepends', addNotesFront(['n2', 'n3'], ferrForNotes))
+printSection('Immutable transforms')
+const transformed = new FErr({ message: 'base', notes: ['n1'] })
+  .withOp('save-user')
+  .withCode('E_SAVE')
+  .withClientMsg('Try again later')
+  .withContext({ requestId: 'req-1', role: 'admin' })
+  .withNotes(['n2', 'n3'])
+printFerr('with* chain', transformed)
 
-printSection('Operation Updates')
-const ferrWithOp = makeFerr({ op: 'load-users', message: 'op-msg' })
-printFerr('updateOp moves prior op into notes', updateOp('save-users', ferrWithOp))
-printFerr('updateOp from raw external Error', updateOp('network-call', new Error('socket down')))
-
-printSection('appendErrInfo vs updateErrInfo')
-const existing = makeFerr({
+printSection('Merge Behavior')
+const existing = new FErr({
   op: 'existing-op',
-  code: 'EXISTING_CODE',
+  code: 'EXISTING',
   message: 'existing-msg',
   clientMsg: 'existing-client',
-  notes: ['existing-note']
+  notes: ['existing-note'],
+  context: { shared: 'existing', existingOnly: 1 },
 })
+
 const incoming = {
   op: 'incoming-op',
-  code: 'INCOMING_CODE',
+  code: 'INCOMING',
   message: 'incoming-msg',
   clientMsg: 'incoming-client',
   notes: ['incoming-note'],
-  externalExp: new Error('incoming-external')
+  context: { shared: 'incoming', incomingOnly: 2 },
+  cause: new Error('incoming-cause')
 }
-printFerr('appendErrInfo (existing wins, incoming moves to notes)', appendErrInfo(existing, incoming))
-printFerr('updateErrInfo (incoming wins, existing moves to notes)', updateErrInfo(existing, incoming))
 
-printSection('External Exception Variants')
-printFerr('appendErrInfo with raw Error', appendErrInfo(makeFerr(), new Error('raw append error')))
-printFerr('updateErrInfo with raw Error', updateErrInfo(makeFerr({ message: 'keep me?' }), new Error('raw update error')))
-printFerr('makeFerr externalExp as string', makeFerr({ externalExp: 'external as string' }))
+printFerr('mergeAppend (existing wins)', existing.mergeAppend(incoming))
+printFerr('mergeUpdate (incoming wins)', existing.mergeUpdate(incoming))
 
-printSection('Rethrow Flows')
-const rethrow1 = caught(() => {
-  try {
-    throw new Error('base external throw')
-  } catch (e) {
-    reThrowWithFerr({ code: 'E_CODE' }, e)
-  }
-})
-printFerr('reThrowWithFerr from raw Error', rethrow1)
+printSection('Context Behavior')
+const circularContext: any = { stage: 'viz-context' }
+circularContext.self = circularContext
+printFerr(
+  'circular context safe formatting',
+  new FErr({ op: 'ctx-circular', message: 'demo', context: circularContext })
+)
 
-const rethrow2 = caught(() => {
-  try {
-    throw makeFerr({ op: 'db-read', message: 'db blew up' })
-  } catch (e) {
-    reThrowWithNotes(['retrying from handler', 'captured by service layer'], e)
-  }
-})
-printFerr('reThrowWithNotes from ferr', rethrow2)
+printSection('Throw helpers')
+const t1 = caught(() => throwFerr({ message: 'throwFerr hit', op: 'throw-op' }))
+printFerr('throwFerr', t1)
 
-const rethrow3 = caught(() => {
-  try {
-    throw new Error('raw for op')
-  } catch (e) {
-    reThrowWithOp('request-handler', e)
-  }
-})
-printFerr('reThrowWithOp from raw Error', rethrow3)
+const t2 = caught(() => throwFerrIf(true, { message: 'throwFerrIf hit', op: 'if-op' }))
+printFerr('throwFerrIf(true)', t2)
+console.log('\nthrowFerrIf(false):', throwFerrIf(false, { message: 'not-thrown' }))
 
-printSection('Conditional Throw Helpers')
-const throwIfTrue = caught(() => throwFerrIf(true, { message: 'throwFerrIf hit' }))
-printFerr('throwFerrIf(true)', throwIfTrue)
-console.log('\nthrowFerrIf(false):', throwFerrIf(false, { message: 'not thrown' }))
+const t3 = caught(() => throwErr('db-read', 'db failed', { context: { table: 'users' } }))
+printFerr('throwErr', t3)
 
-const passthrough = caught(() => throwIfOrPassthrough(false, new Error('should not throw'), 'passthrough-value'))
-console.log('\nthrowIfOrPassthrough(false):', passthrough)
-const throwPass = caught(() => throwIfOrPassthrough(true, new Error('throwIfOrPassthrough throw'), 'unused'))
-printFerr('throwIfOrPassthrough(true) captured via makeFerr', makeFerr({ externalExp: throwPass }))
+const t4 = caught(() => throwErrIf(true, 'cache-read', 'cache failed'))
+printFerr('throwErrIf(true)', t4)
+console.log('\nthrowErrIf(false):', throwErrIf(false, 'x', 'y'))
 
-const throwErrOrRetA = caught(() => throwErrIfOrRet('ret-when-false', false, { message: 'not thrown' }))
-console.log('\nthrowErrIfOrRet(false):', throwErrOrRetA)
-const throwErrOrRetB = caught(() => throwErrIfOrRet('unused', true, { message: 'throwErrIfOrRet thrown' }))
-printFerr('throwErrIfOrRet(true)', throwErrOrRetB)
+printSection('Rethrow helpers')
+const r1 = caught(() => rethrowAppend({ message: 'existing-msg' }, new Error('incoming raw')))
+printFerr('rethrowAppend', r1)
 
-printSection('Defaults Helper')
-const defaulted = makeFerrWithDefaults(undefined, {
-  op: 'default-op',
-  code: 'DEFAULT_CODE',
-  message: 'default-message',
-  clientMsg: 'default-client',
-  notes: ['default-note'],
-  externalExp: null
-})
-printFerr('makeFerrWithDefaults(undefined, defaults)', defaulted)
+const r2 = caught(() => rethrowUpdate({ message: 'existing-msg' }, { message: 'incoming-msg' }))
+printFerr('rethrowUpdate', r2)
 
-printSection('Short vs Full Formatting')
-const fmtTarget = makeFerr({ op: 'format-op', message: 'format message' })
-console.log('\nfErrToMessageStr:', fErrToMessageStr(fmtTarget))
-console.log('\nfErrStr:\n', fErrStr(fmtTarget))
+printSection('Compact vs Detailed')
+const fmtTarget = new FErr({ op: 'format-op', message: 'format message' })
+console.log('\nmessage:', fmtTarget.toMessageString())
+console.log('\ndetailed:\n', fmtTarget.toDetailedString())

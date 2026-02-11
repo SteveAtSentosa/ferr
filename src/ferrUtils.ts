@@ -114,3 +114,45 @@ export const stackStrToArr = stackStr =>
 
 export const stackArrToStr = (msg, stackArr) =>
   msgListToStr(stackArr, `Error: ${msg}\n`, '    ')
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' &&
+  v !== null &&
+  Object.getPrototypeOf(v) === Object.prototype
+
+const normalizeContext = (value: unknown, seen: WeakSet<object>): unknown => {
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'bigint') return `${value.toString()}n`
+  if (typeof value === 'symbol') return value.toString()
+  if (typeof value === 'function') return `[Function ${value.name || 'anonymous'}]`
+  if (value === null || typeof value !== 'object') return value
+
+  if (seen.has(value)) return '[Circular]'
+  seen.add(value)
+
+  if (Array.isArray(value))
+    return value.map(v => normalizeContext(v, seen))
+
+  if (isPlainObject(value)) {
+    const out: Record<string, unknown> = {}
+    Object.entries(value).forEach(([k, v]) => {
+      out[k] = normalizeContext(v, seen)
+    })
+    return out
+  }
+
+  const out: Record<string, unknown> = { _type: value.constructor?.name || 'Object' }
+  Object.entries(value).forEach(([k, v]) => {
+    out[k] = normalizeContext(v, seen)
+  })
+  return out
+}
+
+export const toJson = (value: unknown): string => {
+  try {
+    if (value === undefined) return 'undefined'
+    return JSON.stringify(normalizeContext(value, new WeakSet<object>()), null, 2)
+  } catch {
+    return '[Unserializable]'
+  }
+}

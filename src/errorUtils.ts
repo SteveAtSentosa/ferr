@@ -1,83 +1,95 @@
-const isPlainObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' &&
-  v !== null &&
-  Object.getPrototypeOf(v) === Object.prototype
+import { DEFAULT_FERR_MESSAGE, FErr, type FErrOptions } from './fErr'
+import { toJson } from './ferrUtils'
 
-const normalizeContext = (value: unknown, seen: WeakSet<object>): unknown => {
-  if (value === undefined) return 'undefined'
-  if (typeof value === 'bigint') return `${value.toString()}n`
-  if (typeof value === 'symbol') return value.toString()
-  if (typeof value === 'function') return `[Function ${value.name || 'anonymous'}]`
-  if (value === null || typeof value !== 'object') return value
-
-  if (seen.has(value)) return '[Circular]'
-  seen.add(value)
-
-  if (Array.isArray(value))
-    return value.map(v => normalizeContext(v, seen))
-
-  if (isPlainObject(value)) {
-    const out: Record<string, unknown> = {}
-    Object.entries(value).forEach(([k, v]) => {
-      out[k] = normalizeContext(v, seen)
-    })
-    return out
-  }
-
-  // For non-plain objects, return a best-effort shallow shape for readability.
-  const out: Record<string, unknown> = { _type: value.constructor?.name || 'Object' }
-  Object.entries(value).forEach(([k, v]) => {
-    out[k] = normalizeContext(v, seen)
-  })
-  return out
+export interface ThrowOptions {
+  op?: string
+  code?: string
+  clientMsg?: string
+  context?: unknown
+  cause?: unknown
+  notes?: string | string[]
 }
 
-export const toJson = (value: unknown): string => {
-  try {
-    if (value === undefined) return 'undefined'
-    return JSON.stringify(normalizeContext(value, new WeakSet<object>()), null, 2)
-  } catch {
-    return '[Unserializable]'
-  }
-}
+const toFerrOptions = (message: string, options: ThrowOptions = {}): FErrOptions => ({
+  message,
+  op: options.op,
+  code: options.code,
+  clientMsg: options.clientMsg,
+  context: options.context,
+  cause: options.cause,
+  notes: options.notes
+})
 
 export const formatMsg = (op: string, message: string, context?: unknown): string => {
   const lines = [`${op} failed: ${message}`]
-  if (context !== undefined)
-    lines.push(`Context: ${toJson(context)}`)
+  if (context !== undefined) lines.push(`Context: ${toJson(context)}`)
   return lines.join('\n')
 }
 
-export const throwErr = (op: string, message: string, context?: unknown): never => {
-  throw new Error(formatMsg(op, message, context))
+export const throwFerr = (input: unknown, overrides?: Partial<FErrOptions>): never => {
+  throw FErr.from(input, overrides)
 }
 
-export const throwErrIf = (condition: boolean, op: string, message: string, context?: unknown): void => {
-  if (condition) throwErr(op, message, context)
+export const throwFerrIf = (condition: boolean, input: unknown, overrides?: Partial<FErrOptions>): void => {
+  if (condition) throwFerr(input, overrides)
+}
+
+export const throwErr = (
+  op: string,
+  message: string,
+  options: ThrowOptions = {}
+): never => {
+  return throwFerr(toFerrOptions(message, { ...options, op }))
+}
+
+export const throwErrIf = (
+  condition: boolean,
+  op: string,
+  message: string,
+  options: ThrowOptions = {}
+): void => {
+  if (condition) throwErr(op, message, options)
+}
+
+export const rethrowAppend = (existing: unknown, incoming: unknown): never => {
+  throw FErr.from(existing).mergeAppend(incoming)
+}
+
+export const rethrowUpdate = (existing: unknown, incoming: unknown): never => {
+  throw FErr.from(existing).mergeUpdate(incoming)
+}
+
+export function throwIfUndefined<T>(
+  value: T,
+  op: string,
+  message = DEFAULT_FERR_MESSAGE,
+  options: ThrowOptions = {}
+): asserts value is Exclude<T, undefined> {
+  if (value === undefined) throwErr(op, message, options)
 }
 
 export const createThrowErr = <E extends Error>(
   ErrorClass: new (message: string) => E
-) => (op: string, message: string, context?: unknown): never => {
-    throw new ErrorClass(formatMsg(op, message, context))
+) => (
+    op: string,
+    message: string,
+    options: ThrowOptions = {}
+  ): never => {
+    throw new ErrorClass(formatMsg(op, message, options.context))
   }
 
 export const createThrowErrIf = <E extends Error>(
   ErrorClass: new (message: string) => E
 ) => {
   const throwFn = createThrowErr(ErrorClass)
-  return (condition: boolean, op: string, message: string, context?: unknown): void => {
-    if (condition) throwFn(op, message, context)
+  return (
+    condition: boolean,
+    op: string,
+    message: string,
+    options: ThrowOptions = {}
+  ): void => {
+    if (condition) throwFn(op, message, options)
   }
-}
-
-export function throwIfUndefined<T>(
-  value: T,
-  op: string,
-  message: string,
-  context?: unknown
-): asserts value is Exclude<T, undefined> {
-  if (value === undefined) throwErr(op, message, context)
 }
 
 export const createThrowIfUndefined = <E extends Error>(
@@ -87,9 +99,9 @@ export const createThrowIfUndefined = <E extends Error>(
   return <T>(
     value: T,
     op: string,
-    message: string,
-    context?: unknown
+    message = DEFAULT_FERR_MESSAGE,
+    options: ThrowOptions = {}
   ): asserts value is Exclude<T, undefined> => {
-    if (value === undefined) throwFn(op, message, context)
+    if (value === undefined) throwFn(op, message, options)
   }
 }

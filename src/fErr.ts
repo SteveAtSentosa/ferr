@@ -1,184 +1,333 @@
-import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil, stackStrToArr } from './ferrUtils'
+import { msgListToStr, stackStrToArr, tab, toJson } from './ferrUtils'
 
-export const _tagFErr = '@@ferr'
-export const _defaultErrMsg = 'unkown error'
+export const DEFAULT_FERR_MESSAGE = 'unknown error'
 
-const isObj = (toCheck: any) =>
-  typeof toCheck === 'object' && toCheck !== null && !Array.isArray(toCheck)
+export type FErrNotesInput = string | string[]
 
-const cloneVal = (v: any) =>
-  Array.isArray(v) ? [...v] :
-  isObj(v) ? { ...v } :
-  v
+export interface FErrOptions {
+  message?: string
+  op?: string
+  code?: string
+  clientMsg?: string
+  notes?: FErrNotesInput
+  context?: unknown
+  cause?: unknown
+  stackLines?: string[]
+}
 
-const nil = (v: any) => v === undefined || v === null
-const isString = (v: any) => typeof v === 'string'
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isString = (value: unknown): value is string => typeof value === 'string'
+
+const isNonEmptyString = (value: unknown): value is string => isString(value) && value.length > 0
+
+const isNil = (value: unknown): value is null | undefined => value === null || value === undefined
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) && Object.getPrototypeOf(value) === Object.prototype
+
+const toNoteList = (notes: FErrNotesInput | undefined): string[] => {
+  if (isNil(notes)) return []
+  if (Array.isArray(notes)) return notes.filter(isString)
+  if (isString(notes)) return [notes]
+  return []
+}
+
+const toStackLines = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.filter(isString)
+  if (isString(value)) return stackStrToArr(value)
+  return []
+}
+
+const nonDefaultMessage = (message: string): boolean => message !== DEFAULT_FERR_MESSAGE
+
+const messageFromUnknown = (input: unknown): string | null => {
+  if (isString(input)) return input
+  if (input instanceof Error) return input.message || DEFAULT_FERR_MESSAGE
+  if (isRecord(input) && isString(input.message)) return input.message
+  return null
+}
+
+const normalizeOptionsFromUnknown = (input: unknown): FErrOptions => {
+  if (input instanceof FErr) return input.toOptions()
+  if (isString(input)) return { message: input }
+
+  if (input instanceof Error)
+    return {
+      message: input.message || DEFAULT_FERR_MESSAGE,
+      cause: input
+    }
+
+  if (!isRecord(input)) return {}
+
+  const out: FErrOptions = {}
+  if (isString(input.message)) out.message = input.message
+  if (isString(input.op)) out.op = input.op
+  if (isString(input.code)) out.code = input.code
+  if (isString(input.clientMsg)) out.clientMsg = input.clientMsg
+  if (!isNil(input.context)) out.context = input.context
+
+  if (Array.isArray(input.notes) || isString(input.notes))
+    out.notes = input.notes as FErrNotesInput
+
+  if (!isNil(input.cause)) out.cause = input.cause
+  // transitional support for older naming in incoming objects
+  if (isNil(out.cause) && !isNil(input.externalExp)) out.cause = input.externalExp
+
+  if (Array.isArray(input.stackLines)) out.stackLines = toStackLines(input.stackLines)
+  else if (Array.isArray(input.stackArr)) out.stackLines = toStackLines(input.stackArr)
+  else if (isString(input.stack)) out.stackLines = toStackLines(input.stack)
+
+  return out
+}
+
+const mergeContext = (preferred: unknown, secondary: unknown): unknown => {
+  if (!isNil(preferred) && !isNil(secondary) && isPlainObject(preferred) && isPlainObject(secondary))
+    return { ...secondary, ...preferred }
+
+  return !isNil(preferred) ? preferred : secondary
+}
+
+const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
+  const noteList: string[] = [...preferred.notes]
+
+  let code = preferred.code
+  if (secondary.code) {
+    if (code) noteList.push(`Code: ${secondary.code}`)
+    else code = secondary.code
+  }
+
+  let op = preferred.op
+  if (secondary.op) {
+    if (op) noteList.push(`Op: ${secondary.op}`)
+    else op = secondary.op
+  }
+
+  let message = preferred.message
+  const secondaryMessage = secondary.message
+  if (nonDefaultMessage(secondaryMessage)) {
+    if (nonDefaultMessage(message)) noteList.push(secondaryMessage)
+    else message = secondaryMessage
+  }
+
+  let clientMsg = preferred.clientMsg
+  if (secondary.clientMsg) {
+    if (clientMsg) noteList.push(secondary.clientMsg)
+    else clientMsg = secondary.clientMsg
+  }
+
+  noteList.push(...secondary.notes)
+
+  return new FErr({
+    op,
+    code,
+    message,
+    clientMsg,
+    notes: noteList,
+    context: mergeContext(preferred.context, secondary.context),
+    cause: !isNil(preferred.cause) ? preferred.cause : secondary.cause,
+    stackLines: preferred.stackLines
+  })
+}
 
 export class FErr extends Error {
-  _tag = _tagFErr
-  op = ''
-  code = ''
-  clientMsg = ''
-  context: any = null
-  notes: any[] = []
-  stackArr: string[] = []
-  externalExp: any = null
+  readonly op: string
+  readonly code: string
+  readonly clientMsg: string
+  readonly notes: string[]
+  readonly context: unknown
+  override readonly cause: unknown
+  readonly stackLines: string[]
 
-  constructor(errInfo: any = {}) {
-    const message = isString(errInfo?.message) && errInfo.message.length > 0 ? errInfo.message : _defaultErrMsg
-    super(message)
+  constructor(options: FErrOptions = {}) {
+    const message = isNonEmptyString(options.message) ? options.message : DEFAULT_FERR_MESSAGE
+    super(message, isNil(options.cause) ? undefined : { cause: options.cause })
     this.name = 'FErr'
-    // Keep message enumerable like the original plain-object ferr representation.
+
     Object.defineProperty(this, 'message', {
       value: message,
       enumerable: true,
-      writable: true,
+      writable: false,
       configurable: true
     })
-    this.op = isString(errInfo?.op) ? errInfo.op : ''
-    this.code = isString(errInfo?.code) ? errInfo.code : ''
-    this.clientMsg = isString(errInfo?.clientMsg) ? errInfo.clientMsg : ''
-    this.context = nil(errInfo?.context) ? null : errInfo.context
-    this.notes = Array.isArray(errInfo?.notes) ? [...errInfo.notes] : []
-    this.externalExp = nil(errInfo?.externalExp) ? null : errInfo.externalExp
-    this.stackArr = Array.isArray(errInfo?.stackArr) ? [...errInfo.stackArr] :
-      Array.isArray(errInfo?.stack) ? [...errInfo.stack] :
-      []
+
+    this.op = isString(options.op) ? options.op : ''
+    this.code = isString(options.code) ? options.code : ''
+    this.clientMsg = isString(options.clientMsg) ? options.clientMsg : ''
+    this.notes = toNoteList(options.notes)
+    this.context = isNil(options.context) ? null : options.context
+    this.cause = isNil(options.cause) ? null : options.cause
+
+    this.stackLines =
+      toStackLines(options.stackLines).length > 0 ? toStackLines(options.stackLines) :
+      toStackLines(this.stack)
+
+    Object.setPrototypeOf(this, new.target.prototype)
   }
 
-  setOp(op: any) { this.op = op; return this }
-  setCode(code: any) { this.code = code; return this }
-  setMessage(message: any) { this.message = message; return this }
-  setClientMsg(clientMsg: any) { this.clientMsg = clientMsg; return this }
-  setContext(context: any) { this.context = context; return this }
-  setNotes(notes: any) { this.notes = Array.isArray(notes) ? [...notes] : notes; return this }
-  setStack(stack: any) {
-    this.stackArr = Array.isArray(stack) ? [...stack] :
-      isString(stack) ? stackStrToArr(stack) :
-      []
-    return this
-  }
-  setExternalExp(externalExp: any) { this.externalExp = externalExp; return this }
-}
-
-export const cloneErrInfoWIthDef = (toClone?: any) => {
-  const source = isObj(toClone) ? toClone : {}
-  const fErr = new FErr({
-    op: source.op ?? '',
-    code: source.code ?? '',
-    message: source.message ?? _defaultErrMsg,
-    clientMsg: source.clientMsg ?? '',
-    context: source.context ?? null,
-    notes: source.notes ?? [],
-    stackArr: source.stackArr ?? source.stack ?? [],
-    externalExp: source.externalExp ?? null,
-  })
-  fErr._tag = source._tag ?? _tagFErr
-  return fErr
-}
-
-const readProp = (obj: any, propName: string) =>
-  isObj(obj) ? obj[propName] : undefined
-
-const readPropOrDef = (obj: any, propName: string, fallback: any) => {
-  const value = readProp(obj, propName)
-  return nil(value) ? cloneVal(fallback) : value
-}
-
-const mutateOrCopy = (obj: any, propName: string, val: any, classSetter?: (target: FErr, value: any) => FErr) => {
-  if (obj instanceof FErr && classSetter) return classSetter(obj, val)
-  if (isObj(obj)) return { ...obj, [propName]: val }
-  return obj
-}
-
-export const hasOp = propIsNonEmptyString('op')
-export const getOp = obj => readProp(obj, 'op')
-export const getOpOrDef = obj => readPropOrDef(obj, 'op', '')
-export const setOp = (val, obj) => mutateOrCopy(obj, 'op', val, target => target.setOp(val))
-
-export const hasCode = propIsNonEmptyString('code')
-export const getCode = obj => readProp(obj, 'code')
-export const getCodeOrDef = obj => readPropOrDef(obj, 'code', '')
-export const setCode = (val, obj) => mutateOrCopy(obj, 'code', val, target => target.setCode(val))
-
-export const hasMessage = propIsNonEmptyString('message')
-export const doesNotHaveMessage = toCheck => !hasMessage(toCheck)
-export const getMessage = obj => readProp(obj, 'message')
-export const getMessageOrDef = obj => readPropOrDef(obj, 'message', _defaultErrMsg)
-export const setMessage = (val, obj) => mutateOrCopy(obj, 'message', val, target => target.setMessage(val))
-
-export const hasClientMsg = propIsNonEmptyString('clientMsg')
-export const getClientMsg = obj => readProp(obj, 'clientMsg')
-export const getClientMsgOrDef = obj => readPropOrDef(obj, 'clientMsg', '')
-export const setClientMsg = (val, obj) => mutateOrCopy(obj, 'clientMsg', val, target => target.setClientMsg(val))
-
-export const hasContext = propIsNotNil('context')
-export const getContext = obj => readProp(obj, 'context')
-export const getContextOrDef = obj => readPropOrDef(obj, 'context', null)
-export const setContext = (val, obj) => mutateOrCopy(obj, 'context', val, target => target.setContext(val))
-
-export const hasNotes = propIsNonEmptyArray('notes')
-export const getNotes = obj => readProp(obj, 'notes')
-export const getNotesOrDef = obj => readPropOrDef(obj, 'notes', [])
-export const setNotes = (val, obj) => mutateOrCopy(obj, 'notes', val, target => target.setNotes(val))
-
-export const getStack = obj => {
-  if (obj instanceof FErr) {
-    if (Array.isArray(obj.stackArr)) return obj.stackArr
-    return []
-  }
-  const stackArr = readProp(obj, 'stackArr')
-  if (Array.isArray(stackArr)) return stackArr
-  const stack = readProp(obj, 'stack')
-  if (Array.isArray(stack)) return stack
-  if (isString(stack)) return stack
-  return undefined
-}
-export const getStackOrDef = obj => nil(getStack(obj)) ? [] : getStack(obj)
-export const getStackLines = obj => {
-  if (obj instanceof FErr) {
-    if (Array.isArray(obj.stackArr) && obj.stackArr.length > 0) return obj.stackArr
-    return isString(obj.stack) ? stackStrToArr(obj.stack) : []
+  static is(value: unknown): value is FErr {
+    return value instanceof FErr
   }
 
-  const stackArr = readProp(obj, 'stackArr')
-  if (Array.isArray(stackArr)) return stackArr
+  static from(input: unknown, overrides: Partial<FErrOptions> = {}): FErr {
+    const base = normalizeOptionsFromUnknown(input)
+    const merged: FErrOptions = {
+      ...base,
+      ...overrides,
+      notes: !isNil(overrides.notes) ? overrides.notes : base.notes,
+      stackLines: toStackLines(overrides.stackLines).length > 0 ? overrides.stackLines : base.stackLines
+    }
 
-  const stack = readProp(obj, 'stack')
-  if (Array.isArray(stack)) return stack
-  if (isString(stack)) return stackStrToArr(stack)
-  return []
+    const ferr = new FErr(merged)
+    const incomingMessage = messageFromUnknown(ferr.cause)
+    if (!incomingMessage) return ferr
+
+    if (!nonDefaultMessage(ferr.message))
+      return ferr.withMessage(incomingMessage)
+
+    if (ferr.message !== incomingMessage)
+      return ferr.withNotes(incomingMessage)
+
+    return ferr
+  }
+
+  static mergeAppend(primary: unknown, secondary: unknown): FErr {
+    return mergeAppend(FErr.from(primary), FErr.from(secondary))
+  }
+
+  static mergeUpdate(existing: unknown, incoming: unknown): FErr {
+    return mergeAppend(FErr.from(incoming), FErr.from(existing))
+  }
+
+  get externalExp(): unknown {
+    return this.cause
+  }
+
+  toOptions(): FErrOptions {
+    return {
+      op: this.op,
+      code: this.code,
+      message: this.message,
+      clientMsg: this.clientMsg,
+      notes: [...this.notes],
+      context: this.context,
+      cause: this.cause,
+      stackLines: [...this.stackLines]
+    }
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      op: this.op,
+      code: this.code,
+      message: this.message,
+      clientMsg: this.clientMsg,
+      notes: [...this.notes],
+      context: this.context,
+      cause: this.cause,
+      stackLines: [...this.stackLines]
+    }
+  }
+
+  with(patch: Partial<FErrOptions>): FErr {
+    return new FErr({
+      ...this.toOptions(),
+      ...patch,
+      notes: !isNil(patch.notes) ? patch.notes : this.notes,
+      stackLines: toStackLines(patch.stackLines).length > 0 ? patch.stackLines : this.stackLines
+    })
+  }
+
+  withMessage(message: string): FErr {
+    return this.with({ message })
+  }
+
+  withOp(op: string): FErr {
+    return this.with({ op })
+  }
+
+  withCode(code: string): FErr {
+    return this.with({ code })
+  }
+
+  withClientMsg(clientMsg: string): FErr {
+    return this.with({ clientMsg })
+  }
+
+  withContext(context: unknown): FErr {
+    return this.with({ context })
+  }
+
+  withCause(cause: unknown): FErr {
+    return this.with({ cause })
+  }
+
+  withNotes(notes: FErrNotesInput, position: 'append' | 'prepend' = 'append'): FErr {
+    const incoming = toNoteList(notes)
+    const next = position === 'prepend' ? [...incoming, ...this.notes] : [...this.notes, ...incoming]
+    return this.with({ notes: next })
+  }
+
+  toMessageString(): string {
+    return `${this.op ? `${this.op} - ` : ''}${this.message}`
+  }
+
+  toDetailedString(): string {
+    const lines = ['\nERROR encountered !!']
+    lines.push(tab(`Msg: ${this.toMessageString()}`) as string)
+
+    if (this.clientMsg) lines.push(tab(`Client msg: ${this.clientMsg}`) as string)
+    if (this.code) lines.push(tab(`Code: ${this.code}`) as string)
+
+    if (this.notes.length > 0) {
+      lines.push('Notes:')
+      this.notes.forEach(note => lines.push(tab(note) as string))
+    }
+
+    if (!isNil(this.context)) {
+      lines.push('Context:')
+      toJson(this.context).split('\n').forEach(line => lines.push(tab(line) as string))
+    }
+
+    lines.push('Call Stack:')
+    this.stackLines.forEach(line => lines.push(tab(line) as string))
+
+    if (!isNil(this.cause)) {
+      lines.push('Cause:')
+      if (this.cause instanceof Error) {
+        lines.push(tab(`Name: ${this.cause.name}`) as string)
+        lines.push(tab(`Message: ${this.cause.message}`) as string)
+        if (isString(this.cause.stack)) {
+          lines.push('Cause callstack:')
+          stackStrToArr(this.cause.stack).forEach(line => lines.push(tab(line) as string))
+        }
+      } else {
+        lines.push(tab(toJson(this.cause)) as string)
+      }
+    }
+
+    return msgListToStr(lines)
+  }
+
+  mergeAppend(incoming: unknown): FErr {
+    return FErr.mergeAppend(this, incoming)
+  }
+
+  mergeUpdate(incoming: unknown): FErr {
+    return FErr.mergeUpdate(this, incoming)
+  }
+
+  rethrowAppend(incoming: unknown): never {
+    throw this.mergeAppend(incoming)
+  }
+
+  rethrowUpdate(incoming: unknown): never {
+    throw this.mergeUpdate(incoming)
+  }
 }
-export const setStack = (val, obj) => {
-  if (obj instanceof FErr) return obj.setStack(val)
-  if (isObj(obj)) return { ...obj, stack: val }
-  return obj
-}
-export const hasStack = obj => !nil(getStack(obj))
-export const doesNotHaveStack = obj => !hasStack(obj)
 
-export const hasExternalExp = propIsNotNil('externalExp')
-export const doesNotHaveExternalExp = obj => !hasExternalExp(obj)
-export const getExternalExp = obj => readProp(obj, 'externalExp')
-export const getExternalExpOrDef = obj => readPropOrDef(obj, 'externalExp', null)
-export const setExternalExp = (val, obj) => mutateOrCopy(obj, 'externalExp', val, target => target.setExternalExp(val))
-
-// if toCheck is object with { message } string prop return the message string
-// if toCheck is a string return it (assuming it is a message string)
-// otherwise return null
-export const extractMessage = (toCheck?: any) =>
-  isString(toCheck) ? toCheck :
-  hasMessage(toCheck) ? getMessage(toCheck) :
-  null
-
-export const hasDefaultMessage = toCheck => getMessage(toCheck) === _defaultErrMsg
-export const doesNotHaveDefaultMessage = toCheck => !hasDefaultMessage(toCheck)
-export const hasNonDefaultMessage = toCheck =>
-  hasMessage(toCheck) && doesNotHaveDefaultMessage(toCheck)
-export const doesNotHaveNonDefaultMessage = toCheck => !hasNonDefaultMessage(toCheck)
-
-export const isFerr = toCheck => toCheck instanceof FErr
-export const isNotFerr = toCheck => !isFerr(toCheck)
-
-export const isFerrOrString = toCheck => (isFerr(toCheck) || isString(toCheck))
-export const isNotFerrOrString = toCheck => !isFerrOrString(toCheck)
+export const isFerr = FErr.is
+export const isNotFerr = (value: unknown): boolean => !FErr.is(value)
+export const getStackLines = (value: unknown): string[] => FErr.from(value).stackLines

@@ -1,895 +1,250 @@
 import { describe, it, expect } from 'vitest'
+import { FErr, DEFAULT_FERR_MESSAGE, getStackLines, isFerr, isNotFerr } from '../src/fErr'
 import {
-  addNotes, addNotesFront, makeFerr, makeFerrWithDefaults, throwFerr, throwFerrIf, throwErrIfOrRet,
-  isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
-  defaultErrMessage, appendErrInfo, updateErrInfo, fErrStr,
-} from '../src/ferr-depracated'
-import {
-  hasOp,
-  hasMessage, doesNotHaveMessage, getMessage, getMessageOrDef,
-  hasDefaultMessage, doesNotHaveDefaultMessage, hasNonDefaultMessage,
-  setMessage, extractMessage, getNotes, getContext,
-  setStack, getStack, hasStack, doesNotHaveStack,
-  _defaultErrMsg, FErr
-} from '../src/fErr'
-import {
-  toJson, throwIfUndefined, createThrowIfUndefined
+  createThrowErr,
+  createThrowErrIf,
+  createThrowIfUndefined,
+  formatMsg,
+  rethrowAppend,
+  rethrowUpdate,
+  throwErr,
+  throwErrIf,
+  throwFerr,
+  throwFerrIf,
+  throwIfUndefined
 } from '../src/errorUtils'
+import { retThrownErr, toJson } from '../src/ferrUtils'
 
-import {
-  doesNotHave, stackStrToArr, stackArrToStr, arrayify, flatArrayify,
-  isNonEmptyString, propIsNonEmptyString, isNonEmptyArray,
-  propIsNonEmptyArray, propIsNotNil, isNotObjectOrNonEmptyString,
-  retThrownErr, fPipe, reflect
-} from '../src/ferrUtils'
-
-import {
-  testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
-  fErrWithCode, fErrWithClientMsg, errInfoWithCode, fErrWithAll, errInfoWithCodeAndOp,
-  fErrDefaults, fErrDefult, externalExp, errInfoWithOp, fErrWithOp, fErrWithMsgAndNotes, errInfoWithMsg,
-  incomingErrInfoWithOp, incomingErrInfoWithCode, incomingErrInfoWithMsg, incomingErrInfoWithClientMsg,
-  incomingErrInfoWithNotes, incomingErrInfoWithAll, incomingErrInfoWithExternaExp, incomingErrInfoWithMsgAndNotes,
-  incomingErrInfoWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg, errInfoWithNotes, fErrWithNotes
-} from './testData'
-
-const runFerrTests = () => {
-  describe('server tests', () => {
-    testUtils()
-    testTypes()
-    testAccess()
-    testErrorCreation()
-    testErrorCreationWithExternalExceptions()
-    testErrorContext()
-    testErrorNotes()
-    testErrorOp()
-    testErrorAppend()
-    testErrorUpdate()
-    testErrorThrowing()
-    testErrorClassInterop()
-    testErrorUtils()
-    testErrorPipelines()
-  })
-}
-
-// we will skip stack comparisons
-const omitStack = fErr => {
-  if (!fErr || typeof fErr !== 'object') return fErr
-  const { stack, stackArr, ...rest } = fErr
+const omitStack = (ferr: FErr) => {
+  const { stackLines, ...rest } = ferr.toJSON()
   return rest
 }
-const areEquivErrs = (fErr1, fErr2) => {
-  expect(omitStack(fErr1)).to.deep.equal(omitStack(fErr2))
-  return true
-}
 
-const testUtils = () => {
-  it('should arrayify correctly', () => {
-    expect(arrayify(['a'])).to.deep.equal(['a'])
-    expect(arrayify('a')).to.deep.equal(['a'])
-    expect(flatArrayify(['a'])).to.deep.equal(['a'])
-    expect(flatArrayify('a')).to.deep.equal(['a'])
-    expect(flatArrayify([['a']])).to.deep.equal(['a'])
+describe('FErr class-first API', () => {
+  it('builds with sensible defaults from optional object input', () => {
+    const ferr = new FErr()
+    expect(ferr.message).to.equal(DEFAULT_FERR_MESSAGE)
+    expect(ferr.op).to.equal('')
+    expect(ferr.code).to.equal('')
+    expect(ferr.clientMsg).to.equal('')
+    expect(ferr.context).to.equal(null)
+    expect(ferr.notes).to.deep.equal([])
+    expect(ferr.cause).to.equal(null)
   })
 
-  it('should detect missing props correctly', () => {
-    expect(doesNotHave('a', { a: 'a' })).to.be.false
-    expect(doesNotHave('b', { a: 'a' })).to.be.true
+  it('supports rich constructor options', () => {
+    const ferr = new FErr({
+      message: 'boom',
+      op: 'load-users',
+      code: 'E_LOAD',
+      clientMsg: 'Something went wrong',
+      notes: ['first', 'second'],
+      context: { id: 10 },
+      cause: new Error('db-down')
+    })
+
+    expect(ferr.message).to.equal('boom')
+    expect(ferr.op).to.equal('load-users')
+    expect(ferr.code).to.equal('E_LOAD')
+    expect(ferr.clientMsg).to.equal('Something went wrong')
+    expect(ferr.notes).to.deep.equal(['first', 'second'])
+    expect(ferr.context).to.deep.equal({ id: 10 })
+    expect((ferr.cause as Error).message).to.equal('db-down')
   })
 
-  it('should detect non empty strings correctly', () => {
-    expect(isNonEmptyString('a')).to.be.true
-    expect(isNonEmptyString('')).to.be.false
-    expect(isNonEmptyString({})).to.be.false
-    expect(isNonEmptyString([])).to.be.false
-    expect(propIsNonEmptyString('a', { a: 'a' })).to.be.true
-    expect(propIsNonEmptyString('a', { a: '' })).to.be.false
-    expect(propIsNonEmptyString('b', { a: 'a' })).to.be.false
-    expect(propIsNonEmptyString('a', { a: {} })).to.be.false
-    expect(propIsNonEmptyString('a', { a: [] })).to.be.false
+  it('coerces unknown inputs via FErr.from', () => {
+    const fromString = FErr.from('string-msg')
+    expect(fromString.message).to.equal('string-msg')
+
+    const rawError = new Error('raw-error')
+    const fromError = FErr.from(rawError)
+    expect(fromError.message).to.equal('raw-error')
+    expect(fromError.cause).to.equal(rawError)
+
+    const fromObject = FErr.from({ message: 'obj-msg', notes: 'n1', externalExp: rawError })
+    expect(fromObject.message).to.equal('obj-msg')
+    expect(fromObject.notes).to.deep.equal(['n1', 'raw-error'])
+    expect(fromObject.cause).to.equal(rawError)
   })
 
-  it('should detect non empty arrays correctly', () => {
-    expect(isNonEmptyArray(['a'])).to.be.true
-    expect(isNonEmptyArray([])).to.be.false
-    expect(isNonEmptyArray({})).to.be.false
-    expect(propIsNonEmptyArray('a', { a: ['a'] })).to.be.true
-    expect(propIsNonEmptyArray('a', { a: [] })).to.be.false
-    expect(propIsNonEmptyArray('a', { a: 'a' })).to.be.false
-    expect(propIsNonEmptyArray('b', { a: ['a'] })).to.be.false
+  it('keeps Error interop', () => {
+    const ferr = new FErr({ message: 'interop' })
+    expect(ferr instanceof Error).to.be.true
+    expect(ferr instanceof FErr).to.be.true
+    expect(isFerr(ferr)).to.be.true
+    expect(isNotFerr(ferr)).to.be.false
+    expect(isNotFerr(new Error('x'))).to.be.true
   })
 
-  it('should detect non nill props correctly', () => {
-    expect(propIsNotNil('a', { a: 'a' })).to.be.true
-    expect(propIsNotNil('b', { a: 'a' })).to.be.false
-    expect(propIsNotNil('a', { a: undefined })).to.be.false
-    expect(propIsNotNil('a', { a: null })).to.be.false
+  it('uses immutable with* transforms', () => {
+    const base = new FErr({ message: 'base', notes: ['n1'] })
+    const updated = base.withOp('op1').withCode('E1').withNotes('n2').withContext({ env: 'test' })
+
+    expect(base.op).to.equal('')
+    expect(base.notes).to.deep.equal(['n1'])
+    expect(updated.op).to.equal('op1')
+    expect(updated.code).to.equal('E1')
+    expect(updated.notes).to.deep.equal(['n1', 'n2'])
+    expect(updated.context).to.deep.equal({ env: 'test' })
   })
 
-  it('should detect non object/strings correctly', () => {
-    expect(isNotObjectOrNonEmptyString({})).to.be.false
-    expect(isNotObjectOrNonEmptyString('abc')).to.be.false
-    expect(isNotObjectOrNonEmptyString(1)).to.be.true
-    expect(isNotObjectOrNonEmptyString('')).to.be.true
+  it('supports prepend notes', () => {
+    const ferr = new FErr({ message: 'x', notes: ['n2'] }).withNotes('n1', 'prepend')
+    expect(ferr.notes).to.deep.equal(['n1', 'n2'])
   })
 
-  it('should handle stack conversions properly', () => {
-    const errMsg = 'stack test msg'
-    const testError = new Error(errMsg)
-    const stackArr = stackStrToArr(testError.stack)
-    const reconstructedStackStr = stackArrToStr(errMsg, stackArr)
-    expect(reconstructedStackStr).to.equal(testError.stack)
-  })
-}
+  it('merges with append semantics (existing wins)', () => {
+    const existing = new FErr({
+      op: 'existing-op',
+      code: 'EXISTING',
+      message: 'existing-msg',
+      clientMsg: 'existing-client',
+      notes: ['existing-note'],
+      context: { shared: 'existing', a: 1 }
+    })
 
-const testTypes = () => {
-  it('should detect fErr types correctly', () => {
-    expect(isFerr(makeFerr())).to.be.true
-    expect(isFerr(makeFerr('dude'))).to.be.true
-    expect(makeFerr() instanceof Error).to.be.true
-    expect(makeFerr() instanceof FErr).to.be.true
-    expect(isFerr({ message: 'dude' })).to.be.false
-    expect(isFerr('message')).to.be.false
-    expect(isFerr(['message'])).to.be.false
-    expect(isNotFerr(makeFerr())).to.be.false
-    expect(isNotFerr(makeFerr('dude'))).to.be.false
-    expect(isNotFerr({ message: 'dude' })).to.be.true
-    expect(isNotFerr('message')).to.be.true
-    expect(isNotFerr(['message'])).to.be.true
-  })
-}
-
-const testAccess = () => {
-  // TODO: build these tests out and include set and gets
-  it('should access op prop correctly', () => {
-    expect(hasOp(errInfoWithOp)).to.be.true
-    expect(hasOp({})).to.be.false
-  })
-
-  it('should access message prop correctly', () => {
-
-    try { throw new Error('exp msg') } catch (e) { expect(hasMessage(e)).to.be.true }
-    expect(hasMessage({ message: 'string' })).to.be.true
-    expect(hasMessage({ message: '' })).to.be.false
-    expect(hasMessage({ message: ['non str msg'] })).to.be.false
-
-    expect(doesNotHaveMessage({ message: 'string' })).to.be.false
-    expect(doesNotHaveMessage({ message: '' })).to.be.true
-    expect(doesNotHaveMessage({ message: ['non str msg'] })).to.be.true
-
-    expect(getMessage({ message: 'message' })).to.equal('message')
-    expect(getMessage({})).to.equal(undefined)
-    expect(getMessage('abc')).to.equal(undefined)
-    expect(getMessageOrDef({})).to.equal(defaultErrMessage())
-
-    expect(setMessage('set msg', {})).to.deep.equal({ message: 'set msg' })
-    expect(getMessage(setMessage('set msg', {}))).to.equal('set msg')
-    expect(getMessageOrDef(setMessage('set msg', {}))).to.equal('set msg')
-
-    expect(hasDefaultMessage({ message: _defaultErrMsg })).to.be.true
-    expect(hasDefaultMessage(makeFerr())).to.be.true
-    expect(hasDefaultMessage({ message: 'non default' })).to.be.false
-
-    expect(doesNotHaveDefaultMessage({ message: _defaultErrMsg })).to.be.false
-    expect(doesNotHaveDefaultMessage(makeFerr())).to.be.false
-    expect(doesNotHaveDefaultMessage({ message: 'non default' })).to.be.true
-
-    expect(hasNonDefaultMessage({ message: 'non default msg' })).to.be.true
-    expect(hasNonDefaultMessage({ message: _defaultErrMsg })).to.be.false
-    expect(hasNonDefaultMessage({ message: '' })).to.be.false
-    expect(hasNonDefaultMessage({  })).to.be.false
-  })
-
-  it('should extract a message correctly', () => {
-    try { throw new Error('exp msg') } catch (e) { expect(extractMessage(e)).to.equal('exp msg') }
-    expect(extractMessage({ message: 'str msg' })).to.equal('str msg')
-    expect(extractMessage('obj msg')).to.equal('obj msg')
-    expect(extractMessage()).to.be.null
-    expect(extractMessage({})).to.be.null
-    expect(extractMessage({ random: 'prop' })).to.be.null
-  })
-
-  it('should access stack correctly', () => {
-    let stack = {}
-    expect(hasStack(stack)).to.be.false
-    expect(doesNotHaveStack(stack)).to.be.true
-    stack = setStack(['some call stack'], stack)
-    expect(hasStack(stack)).to.be.true
-    expect(doesNotHaveStack(stack)).to.be.false
-    expect(getStack(stack)).to.be.deep.equal(['some call stack'])
-  })
-}
-
-const testErrorCreation = () =>
-  it('should make errors correctly', () => {
-
-    // test no error info given
-    const fErrNoInfo = makeFerr()
-    expect(getStack(fErrNoInfo)).to.be.an.instanceof(Array)
-    expect(areEquivErrs(fErrNoInfo, fErrDefaults)).to.be.true
-
-    // test only string given
-    const fErrFromString = makeFerr('test-error')
-    expect(getStack(fErrFromString)).to.be.an.instanceof(Array)
-    expect(areEquivErrs(fErrFromString, setMessage('test-error', fErrDefaults))).to.be.true
-
-    // test partial error info given
-    const partialErrInfo = { op: 'partial-op', message: 'partial-msg', externalExp, }
-    const fErrFromPartialInfo = makeFerr(partialErrInfo)
-    expect(getStack(fErrFromPartialInfo)).to.be.an.instanceof(Array)
-
-    expect(areEquivErrs(fErrFromPartialInfo, {
-      ...fErrDefaults,
-      ...partialErrInfo,
-      notes: ['external-exception']
-    })).to.be.true
-
-    // test full error info given
-    const fullErrInfo = {
-      op: 'full-op', code: 'full-code', message: 'full-msg',
-      clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp
-    }
-    const fErrFromFullInfo = makeFerr(fullErrInfo)
-    expect(getStack(fErrFromFullInfo)).to.be.an.instanceof(Array)
-    expect(areEquivErrs(fErrFromFullInfo, {
-      ...fErrDefaults,
-      ...fullErrInfo,
-      notes: ['some', 'note', 'external-exception']
-    })).to.be.true
-
-    // check that if an fErr is provided it is simply returned
-    expect(areEquivErrs(fErrFromPartialInfo, fErrFromPartialInfo)).to.be.true
-    expect(areEquivErrs(fErrFromFullInfo, fErrFromFullInfo)).to.be.true
-
-    // test using notes as message when not present
-    expect(areEquivErrs(
-      makeFerr(errInfoWithNotes),
-      { ...fErrWithNotes, message: errInfoWithNotes.notes[0] }
-    )).to.be.true
-    expect(areEquivErrs(
-      makeFerr(incomingErrInfoWithMsgAndNotes),
-      fErrWithMsgAndNotes
-    )).to.be.true
-
-    const fallbackDefaults = {
-      op: 'default-op',
-      code: 'default-code',
-      message: 'default-message',
-      clientMsg: 'default-client-msg',
-      notes: ['default-note'],
-      externalExp: null
+    const incoming = {
+      op: 'incoming-op',
+      code: 'INCOMING',
+      message: 'incoming-msg',
+      clientMsg: 'incoming-client',
+      notes: ['incoming-note'],
+      context: { shared: 'incoming', b: 2 }
     }
 
-    expect(areEquivErrs(
-      makeFerrWithDefaults(undefined, fallbackDefaults),
-      makeFerr(fallbackDefaults)
-    )).to.be.true
-
-    expect(areEquivErrs(
-      makeFerrWithDefaults(null, fallbackDefaults),
-      makeFerr(fallbackDefaults)
-    )).to.be.true
+    const merged = existing.mergeAppend(incoming)
+    expect(merged.op).to.equal('existing-op')
+    expect(merged.code).to.equal('EXISTING')
+    expect(merged.message).to.equal('existing-msg')
+    expect(merged.clientMsg).to.equal('existing-client')
+    expect(merged.notes).to.include.members(['existing-note', 'incoming-note'])
+    expect(merged.context).to.deep.equal({ shared: 'existing', a: 1, b: 2 })
   })
 
-const testErrorCreationWithExternalExceptions = () => {
-  it('should make handle external exception objects correctly', async () => {
-    let fErr
-    fErr = makeFerr({ externalExp: new Error('Error obj exp') })
-    expect(getMessage(fErr)).to.equal('Error obj exp')
-    expect(getNotes(fErr)).to.deep.equal([])
-
-    fErr = makeFerr({  message: 'message', externalExp: new Error('Error obj exp') })
-    expect(getMessage(fErr)).to.equal('message')
-    expect(getNotes(fErr)).to.deep.equal(['Error obj exp'])
-
-    fErr = makeFerr({ externalExp: { message: 'Object w message exp' } })
-    expect(getMessage(fErr)).to.equal('Object w message exp')
-    expect(getNotes(fErr)).to.deep.equal([])
-
-    fErr = makeFerr({ message: 'message', externalExp: { message: 'Object w message exp' } })
-    expect(getMessage(fErr)).to.equal('message')
-    expect(getNotes(fErr)).to.deep.equal(['Object w message exp'])
-  })
-
-  it('should make handle external exception strings correctly', async () => {
-    let fErr
-    fErr = makeFerr({ externalExp: 'string exp' })
-    expect(getMessage(fErr)).to.equal('string exp')
-    expect(getNotes(fErr)).to.deep.equal([])
-
-    fErr = makeFerr({ message: 'message', externalExp: 'string exp' })
-    expect(getMessage(fErr)).to.equal('message')
-    expect(getNotes(fErr)).to.deep.equal(['string exp'])
-  })
-
-  it('should incmoing external exceptions correcty', async () => {
-    const base = makeFerr()
-
-    const appended = appendErrInfo(base, externalExp)
-    expect(getMessage(appended)).to.equal(externalExp.message)
-    expect(appended.externalExp).to.equal(externalExp)
-
-    const updated = updateErrInfo(base, externalExp)
-    expect(getMessage(updated)).to.equal(externalExp.message)
-    expect(updated.externalExp).to.equal(externalExp)
-
-    const withExistingMessage = makeFerr({ message: 'keep' })
-    const appendedWithExistingMessage = appendErrInfo(withExistingMessage, externalExp)
-    expect(getMessage(appendedWithExistingMessage)).to.equal('keep')
-    expect(getNotes(appendedWithExistingMessage)).to.deep.equal([externalExp.message])
-    expect(appendedWithExistingMessage.externalExp).to.equal(externalExp)
-
-    const updatedWithExistingMessage = updateErrInfo(withExistingMessage, externalExp)
-    expect(getMessage(updatedWithExistingMessage)).to.equal(externalExp.message)
-    expect(getNotes(updatedWithExistingMessage)).to.deep.equal(['keep'])
-    expect(updatedWithExistingMessage.externalExp).to.equal(externalExp)
-  })
-}
-
-const testErrorNotes = () => {
-  it('should handle error notes correcly', async () => {
-    const message = 'notes-msg'
-
-    // test default to empty notes list
-    expect(makeFerr({ message }).notes).to.deep.equal([])
-    expect(areEquivErrs(
-      makeFerr({ message }),
-      { ...fErrDefaults, message }
-    )).to.be.true
-
-    // test note list provided at err creation
-
-    const notes = ['a', 'b']
-    expect(makeFerr({ message, notes }).notes).to.deep.equal(notes)
-    expect(areEquivErrs(
-      makeFerr({ message, notes }),
-      { ...fErrDefaults, message, notes }
-    )).to.be.true
-
-    // test single note add
-
-    const addedNote = 'c'
-    const fErrWithOrigNotes = makeFerr({ message, notes })
-    expect(areEquivErrs(
-      makeFerr(fErrWithOrigNotes),
-      { ...fErrDefaults, message, notes }
-    )).to.be.true
-
-    const fErrWithAddedNote = addNotes(addedNote, fErrWithOrigNotes)
-    expect(areEquivErrs(
-      fErrWithAddedNote,
-      { ...fErrDefaults, message, notes: [...notes, addedNote] }
-    )).to.be.true
-
-    const fErrWithAddedNoteFront = addNotesFront(addedNote, fErrWithOrigNotes)
-    expect(areEquivErrs(
-      fErrWithAddedNoteFront,
-      { ...fErrDefaults, message, notes: [addedNote, ...notes] }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      fErrWithOrigNotes,
-      { ...fErrDefaults, message, notes }
-    )).to.be.true // non-mutation check
-
-    // test multiple note add
-
-    const addedNotes = ['x', 'y', 'z']
-    const fErrWithAddedNoteList = addNotes(addedNotes, fErrWithOrigNotes)
-    expect(areEquivErrs(
-      fErrWithAddedNoteList,
-      { ...fErrDefaults, message, notes: [...notes, ...addedNotes] }
-    )).to.be.true
-
-    const fErrWithAddedNoteListFront = addNotesFront(addedNotes, fErrWithOrigNotes)
-    expect(areEquivErrs(
-      fErrWithAddedNoteListFront,
-      { ...fErrDefaults, message, notes: [...addedNotes, ...notes] }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      fErrWithOrigNotes,
-      { ...fErrDefaults, message, notes }
-    )).to.be.true // non-mutation check
-  })
-}
-
-const testErrorContext = () => {
-  it('should carry context through make/append/update flows', async () => {
-    const created = makeFerr({
-      op: 'create-op',
-      message: 'create-msg',
-      context: { id: 10, nested: { ok: true } }
-    })
-    expect(getContext(created)).to.deep.equal({ id: 10, nested: { ok: true } })
-
-    const appended = appendErrInfo(
-      makeFerr({ message: 'base', context: { baseOnly: 1, shared: 'base' } }),
-      { context: { incomingOnly: 2, shared: 'incoming' } }
-    )
-    expect(getContext(appended)).to.deep.equal({
-      baseOnly: 1,
-      incomingOnly: 2,
-      shared: 'base'
+  it('merges with update semantics (incoming wins)', () => {
+    const existing = new FErr({
+      op: 'existing-op',
+      code: 'EXISTING',
+      message: 'existing-msg',
+      context: { shared: 'existing', a: 1 }
     })
 
-    const updated = updateErrInfo(
-      makeFerr({ message: 'base', context: { baseOnly: 1, shared: 'base' } }),
-      { context: { incomingOnly: 2, shared: 'incoming' } }
-    )
-    expect(getContext(updated)).to.deep.equal({
-      baseOnly: 1,
-      incomingOnly: 2,
-      shared: 'incoming'
-    })
+    const incoming = {
+      op: 'incoming-op',
+      code: 'INCOMING',
+      message: 'incoming-msg',
+      context: { shared: 'incoming', b: 2 }
+    }
+
+    const merged = existing.mergeUpdate(incoming)
+    expect(merged.op).to.equal('incoming-op')
+    expect(merged.code).to.equal('INCOMING')
+    expect(merged.message).to.equal('incoming-msg')
+    expect(merged.context).to.deep.equal({ shared: 'incoming', b: 2, a: 1 })
   })
 
-  it('should include context in formatted ferr strings', async () => {
-    const withContext = makeFerr({
+  it('renders detailed formatting with context and cause', () => {
+    const cause = new Error('root-cause')
+    const ferr = new FErr({
       op: 'fmt-op',
-      message: 'fmt-msg',
-      context: { k: 'v', keepUndefined: undefined }
+      message: 'fmt-message',
+      context: { key: 'value', missing: undefined },
+      cause
     })
-    const msg = fErrStr(withContext)
-    expect(msg.includes('Context:')).to.be.true
-    expect(msg.includes('"keepUndefined": "undefined"')).to.be.true
-  })
-}
 
-const testErrorOp = () => {
-  it('should handle error operation changes correcly', async () => {
-    const op = 'updated-op'
-    expect(areEquivErrs(
-      updateOp(op, fErrWithAll),
-      { ...fErrWithAll, op, notes: [fErrWithAll.op, ...fErrWithAll.notes] }
-    )).to.be.true
-
-    // incmoing error not fErr
-    expect(areEquivErrs(
-      updateOp(op, externalExp),
-      makeFerr({ op, externalExp })
-    )).to.be.true
-  })
-}
-
-const testErrorAppend = () => {
-  it('should copy over non-existant props for append', async () => {
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithOp), {
-        ...fErrDefult,
-        ...incomingErrInfoWithOp
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithCode), {
-        ...fErrDefult, ...incomingErrInfoWithCode
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithMsg), {
-        ...fErrDefult,
-        ...incomingErrInfoWithMsg
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithClientMsg), {
-        ...fErrDefult,
-        ...incomingErrInfoWithClientMsg
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithNotes), {
-        ...fErrDefult,
-        ...incomingErrInfoWithNotes,
-        message: incomingErrInfoWithNotes.notes[0]
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithExternaExp), {
-        ...fErrDefult,
-        ...incomingErrInfoWithExternaExp,
-        message: incomingErrInfoWithExternaExp.externalExp.message
-      })).to.be.true
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, incomingErrInfoWithAll), {
-        ...fErrDefult,
-        ...incomingErrInfoWithAll,
-        notes: [
-          ...incomingErrInfoWithAll.notes,
-          incomingErrInfoWithAll.externalExp.message
-        ]
-      })).to.be.true
-    // test with msg string input
-    expect(areEquivErrs(
-      appendErrInfo(fErrDefult, 'string-only-msg'), {
-        ...fErrDefult,
-        message: 'string-only-msg'
-      })).to.be.true
+    const str = ferr.toDetailedString()
+    expect(str.includes('Context:')).to.be.true
+    expect(str.includes('"missing": "undefined"')).to.be.true
+    expect(str.includes('Cause:')).to.be.true
+    expect(str.includes('root-cause')).to.be.true
   })
 
-  it('should append existing props to message/notes', async () => {
-    let opStr = `Op: ${incomingErrInfoWithOp.op}`
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithOp, incomingErrInfoWithOp),
-      { ...fErrWithOp, notes: [opStr] }
-    )).to.be.true
-
-    let codeStr = `Code: ${incomingErrInfoWithCode.code}`
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithCode, incomingErrInfoWithCode),
-      { ...fErrWithCode, notes: [`Code: ${incomingErrInfoWithCode.code}`] }
-    )).to.be.true
-
-    const clientMsgStr = incomingErrInfoWithClientMsg.clientMsg
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithClientMsg, incomingErrInfoWithClientMsg),
-      { ...fErrWithClientMsg, notes: [clientMsgStr] }
-    )).to.be.true
-
-    codeStr = `Code: ${incomingErrInfoWithCodeAndOp.code}, `
-    opStr = `Op: ${incomingErrInfoWithCodeAndOp.op}`
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOp),
-      { ...fErrWithCodeAndOp, notes: [codeStr + opStr] }
-    )).to.be.true
-
-    codeStr = `Code: ${incomingErrInfoWithCodeAndOpAndMsg.code}, `
-    opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
-    let msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithCodeAndOpAndMsg, incomingErrInfoWithCodeAndOpAndMsg),
-      { ...fErrWithCodeAndOpAndMsg, notes: [codeStr + opStr + msgStr] }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithMsg),
-      { ...fErrWithCodeAndOpAndMsg, ...incomingErrInfoWithMsg }
-    )).to.be.true
-
-    codeStr = `Code: ${incomingErrInfoWithCodeAndOpAndMsg.code}, `
-    opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
-    msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
-    expect(areEquivErrs(
-      appendErrInfo(fErrWithCodeAndOp, incomingErrInfoWithCodeAndOpAndMsg),
-      {
-        ...fErrWithCodeAndOpAndMsg,
-        message: codeStr + opStr + msgStr,
-      }
-    )).to.be.true
-  })
-}
-
-
-const testErrorUpdate = () => {
-  it('should copy over non-existant props for update', async () => {
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithOp),
-      { ...fErrDefult, ...incomingErrInfoWithOp }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithCode),
-      { ...fErrDefult, ...incomingErrInfoWithCode }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithMsg),
-      {  ...fErrDefult,  ...incomingErrInfoWithMsg }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithClientMsg),
-      { ...fErrDefult, ...incomingErrInfoWithClientMsg }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithNotes), {
-        ...fErrDefult,
-        ...incomingErrInfoWithNotes,
-        message: incomingErrInfoWithNotes.notes[0],
-      }
-    )).to.be.true
-
-    const newProps = { ...errInfoWithCodeAndOp, externalExp }
-    const res = makeFerr(newProps)
-    const res2 = updateErrInfo(errInfoWithCodeAndOp, externalExp)
-    // console.log('res: ', res)
-    // console.log('res2: ', res2)
-
-    expect(areEquivErrs(res, res2)).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(errInfoWithCodeAndOp, externalExp),
-      { ...makeFerr(newProps) }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithExternaExp), {
-        ...fErrDefult,
-        ...incomingErrInfoWithExternaExp,
-        message: incomingErrInfoWithExternaExp.externalExp.message
-      }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, incomingErrInfoWithAll), {
-        ...fErrDefult,
-        ...incomingErrInfoWithAll,
-        notes: [
-          ...incomingErrInfoWithAll.notes,
-          incomingErrInfoWithAll.externalExp.message
-        ]
-      }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrDefult, 'string-only-msg'),
-      { ...fErrDefult, message: 'string-only-msg' }
-    )).to.be.true
+  it('serializes circular context safely', () => {
+    const ctx: any = { stage: 'test' }
+    ctx.self = ctx
+    const ferr = new FErr({ message: 'circular', context: ctx })
+    expect(ferr.toDetailedString().includes('"self": "[Circular]"')).to.be.true
+    expect(toJson(ctx).includes('"self": "[Circular]"')).to.be.true
   })
 
-  it('should merge existing props to message/notes', async () => {
-    const newOp = { op: 'new-op' }
-    const oldOpStr = `Op: ${fErrWithOp.op}`
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithOp, newOp),
-      { ...makeFerr(newOp), notes: [oldOpStr] }
-    )).to.be.true
-
-    const newCode = { code: 'new-code' }
-    const oldCodeStr = `Code: ${fErrWithCode.code}`
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithCode, newCode),
-      { ...makeFerr(newCode), notes: [oldCodeStr] }
-    )).to.be.true
-
-    const newMsg = { message: 'new-message' }
-    const oldMsgStr = fErrWithMsg.message
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithMsg, newMsg),
-      { ...makeFerr(newMsg), notes: [oldMsgStr] }
-    )).to.be.true
-
-    const newClientMsg = { clientMsg: 'new-client-msg' }
-    const oldClientMsgStr = fErrWithClientMsg.clientMsg
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithClientMsg, newClientMsg),
-      { ...makeFerr(newClientMsg), notes: [oldClientMsgStr] }
-    )).to.be.true
-
-    const newOpAndCode = { ...newOp, ...newCode }
-    const oldCodeAndOpStr = `${oldCodeStr}, ${oldOpStr}`
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithCodeAndOp, newOpAndCode),
-      { ...makeFerr(newOpAndCode), notes: [oldCodeAndOpStr] }
-    )).to.be.true
-
-    const newOpAndCodeAndMsg =  { ...newOp, ...newCode, ...newMsg }
-    const oldCodeAndOpAndMsgStr = `${oldCodeStr}, ${oldOpStr}: ${oldMsgStr}`
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithCodeAndOpAndMsg, newOpAndCodeAndMsg),
-      { ...makeFerr(newOpAndCodeAndMsg), notes: [oldCodeAndOpAndMsgStr] }
-    )).to.be.true
-
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithCodeAndOp, newMsg),
-      { ...makeFerr({ ...errInfoWithCodeAndOp, ...newMsg }) }
-    )).to.be.true
-
-    // codeStr = `Code: ${incomingErrInfoWithCodeAndOpAndMsg.code}, `
-    // opStr = `Op: ${incomingErrInfoWithCodeAndOpAndMsg.op}: `
-    // msgStr = incomingErrInfoWithCodeAndOpAndMsg.message
-    expect(areEquivErrs(
-      updateErrInfo(fErrWithCodeAndOp, newOpAndCodeAndMsg),
-      {
-        ...makeFerr(newOpAndCodeAndMsg),
-        notes: [`${oldCodeStr}, ${oldOpStr}`]
-      }
-    )).to.be.true
-  })
-}
-
-const testErrorThrowing = () => {
-  it('should throw errors correctly', async () => {
-    expect(areEquivErrs(retThrownErr(throwFerr, testMsg), fErrWithMsg)).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(throwFerr, errInfoWithCodeAndOpAndMsg),
-      fErrWithCodeAndOpAndMsg
-    )).to.be.true
+  it('exposes stack line helpers', () => {
+    const ferr = new FErr({ message: 'stack' })
+    expect(ferr.stackLines.length > 0).to.be.true
+    expect(getStackLines(ferr).length > 0).to.be.true
   })
 
-  it('should conditionally throw errors correctly', async () => {
-    expect(areEquivErrs(retThrownErr(throwFerrIf, true, fErrWithCodeAndOp), fErrWithCodeAndOp)).to.be.true
-    expect(areEquivErrs(retThrownErr(throwFerrIf, 10 > 1, {}), fErrDefult)).to.be.true
-    expect(retThrownErr(throwFerrIf, false, fErrWithCodeAndOp)).to.be.null
-    expect(retThrownErr(throwFerrIf, 10 < 1, {})).to.be.null
+  it('provides stable toJSON output shape', () => {
+    const ferr = new FErr({ message: 'json', op: 'x', notes: ['n1'] })
+    const json = ferr.toJSON()
+    expect(json.name).to.equal('FErr')
+    expect(json.message).to.equal('json')
+    expect(json.op).to.equal('x')
+    expect(json.notes).to.deep.equal(['n1'])
   })
 
-  it('should conditionally throw errors or return specified value', async () => {
-    expect(areEquivErrs(
-      retThrownErr(throwErrIfOrRet, 'should-not-be-returned', true, fErrWithCodeAndOp),
-      fErrWithCodeAndOp
-    )).to.be.true
+  it('throws via throwFerr and throwFerrIf', () => {
+    const thrown = retThrownErr(() => throwFerr('thrown-msg'))
+    expect(thrown instanceof FErr).to.be.true
+    expect((thrown as FErr).message).to.equal('thrown-msg')
 
-    expect(areEquivErrs(
-      retThrownErr(throwErrIfOrRet, 'should-not-be-returned', 10 > 1, {}),
-      fErrDefult
-    )).to.be.true
-
-    // not sure why I created throwErrIfOrRet
-    expect(throwErrIfOrRet('should-be-returned', false, fErrWithCodeAndOp)).to.equal('should-be-returned')
-    expect(throwErrIfOrRet('should-be-returned-also', 10 < 1, fErrWithCodeAndOp)).to.equal('should-be-returned-also')
+    expect(retThrownErr(() => throwFerrIf(false, 'ignored'))).to.equal(null)
+    const conditional = retThrownErr(() => throwFerrIf(true, { message: 'cond' }))
+    expect((conditional as FErr).message).to.equal('cond')
   })
 
-  it('should rethrow with notes correctly', async () => {
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithNotes, ['note added on throw'], fErrWithCodeAndOpAndMsg),
-      { ...fErrWithCodeAndOpAndMsg, notes: ['note added on throw'] }
-    )).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithNotes, ['t1', 't2'], fErrWithMsgAndNotes),
-      { ...fErrWithMsgAndNotes, notes: [...fErrWithMsgAndNotes.notes, 't1', 't2'] }
-    )).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithNotes, 't3', fErrWithMsgAndNotes),
-      { ...fErrWithMsgAndNotes, notes: [...fErrWithMsgAndNotes.notes, 't3'] }
-    )).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithNotes, ['this aint good'], externalExp),
-      makeFerr({ message: 'this aint good', notes: ['this aint good'], externalExp })
-    )).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithNotes, 'I mean its really bad', externalExp),
-      makeFerr({ message: 'I mean its really bad', notes: ['I mean its really bad'], externalExp })
-    )).to.be.true
-  })
-  it('should rethrow with op correctly', async () => {
-    const op = 'thrown-op'
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithOp, op, fErrWithOp),
-      { ...fErrWithOp, op, notes: [fErrWithOp.op, ...fErrWithOp.notes] }
-    )).to.be.true
-    expect(areEquivErrs(
-      retThrownErr(reThrowWithOp, op, externalExp),
-      makeFerr({ op, externalExp })
-    )).to.be.true
+  it('throws formatted operation errors via throwErr and throwErrIf', () => {
+    const thrown = retThrownErr(() => throwErr('load', 'failed', { context: { id: 1 } })) as FErr
+    expect(thrown instanceof FErr).to.be.true
+    expect(thrown.op).to.equal('load')
+    expect(thrown.message).to.equal('failed')
+    expect(thrown.context).to.deep.equal({ id: 1 })
 
-  })
-}
-
-const testErrorPipelines = () => {
-  it('should rethrow in pipelines correctly', async () => {
-    expect(await fPipe(reflect, reflect)(1).catch(reflect)).to.equal(1)
-
-    expect(areEquivErrs(
-      await fPipe(
-        reflect,
-        () => throwFerr(errInfoWithCodeAndOpAndMsg)
-      )()
-        .catch(reflect),
-      fErrWithCodeAndOpAndMsg)).to.be.true
-
-    const ferr1 = await fPipe(
-      reflect,
-      () => { throw externalExp },
-      reflect,
-    )()
-      .catch(reThrowWithFerr(errInfoWithCode))
-      .catch(reThrowWithFerr(errInfoWithOp))
-      .catch(reThrowWithFerr(errInfoWithMsg))
-      .catch(reflect)
-    expect(areEquivErrs(
-      ferr1,
-      { ...fErrWithCodeAndOpAndMsg, notes: [externalExp.message], externalExp }
-    )).to.be.true
-  })
-}
-
-const testErrorClassInterop = () => {
-  it('should interop cleanly with Error in try/catch flows', async () => {
-    let caughtErr: any = null
-
-    try {
-      throwFerr({ op: 'interop-op', code: 'INTEROP', message: 'interop-message' })
-    } catch (e) {
-      caughtErr = e
-    }
-
-    expect(caughtErr instanceof Error).to.be.true
-    expect(caughtErr instanceof FErr).to.be.true
-    expect(isFerr(caughtErr)).to.be.true
-    expect(caughtErr.name).to.equal('FErr')
-    expect(caughtErr.message).to.equal('interop-message')
+    expect(retThrownErr(() => throwErrIf(false, 'x', 'y'))).to.equal(null)
+    const conditional = retThrownErr(() => throwErrIf(true, 'save', 'bad')) as FErr
+    expect(conditional.op).to.equal('save')
   })
 
-  it('should rethrow caught external Error as FErr while preserving external exception', async () => {
-    let caughtErr: any = null
+  it('supports rethrow append/update helpers', () => {
+    const appended = retThrownErr(() => rethrowAppend({ message: 'existing' }, { message: 'incoming' })) as FErr
+    expect(appended.message).to.equal('existing')
+    expect(appended.notes).to.include('incoming')
 
-    try {
-      try {
-        throw new Error('low-level-error')
-      } catch (e) {
-        reThrowWithFerr({ op: 'service-op', code: 'SERVICE' }, e)
-      }
-    } catch (e) {
-      caughtErr = e
-    }
-
-    expect(caughtErr instanceof Error).to.be.true
-    expect(caughtErr instanceof FErr).to.be.true
-    expect(caughtErr.externalExp instanceof Error).to.be.true
-    expect(caughtErr.externalExp.message).to.equal('low-level-error')
-    expect(caughtErr.code).to.equal('SERVICE')
-    expect(caughtErr.op).to.equal('service-op')
+    const updated = retThrownErr(() => rethrowUpdate({ message: 'existing' }, { message: 'incoming' })) as FErr
+    expect(updated.message).to.equal('incoming')
+    expect(updated.notes).to.include('existing')
   })
 
-  it('should convert raw Error into FErr via makeFerr', async () => {
-    const ferrFromError = makeFerr(new Error('raw-conversion-error'))
+  it('supports throwIfUndefined assertions', () => {
+    let missing: string | undefined = undefined
+    const thrown = retThrownErr(() => throwIfUndefined(missing, 'cfg', 'missing cfg')) as FErr
+    expect(thrown.op).to.equal('cfg')
 
-    expect(ferrFromError instanceof Error).to.be.true
-    expect(ferrFromError instanceof FErr).to.be.true
-    expect(isFerr(ferrFromError)).to.be.true
-    expect(getMessage(ferrFromError)).to.equal('raw-conversion-error')
-    expect(ferrFromError.externalExp instanceof Error).to.be.true
+    missing = 'ok'
+    expect(retThrownErr(() => throwIfUndefined(missing, 'cfg', 'missing cfg'))).to.equal(null)
   })
 
-  it('should keep thrown values catchable as Error after reThrowWithNotes', async () => {
-    let caughtErr: any = null
+  it('supports custom throw factories', () => {
+    class ClientError extends Error {}
 
-    try {
-      try {
-        throw new Error('external-before-notes')
-      } catch (e) {
-        reThrowWithNotes(['added-note'], e)
-      }
-    } catch (e) {
-      caughtErr = e
-    }
+    const throwClientErr = createThrowErr(ClientError)
+    const throwClientErrIf = createThrowErrIf(ClientError)
+    const throwClientErrIfUndef = createThrowIfUndefined(ClientError)
 
-    expect(caughtErr instanceof Error).to.be.true
-    expect(caughtErr instanceof FErr).to.be.true
-    expect(getNotes(caughtErr)).to.deep.equal(['added-note', 'external-before-notes'])
-    expect(caughtErr.externalExp instanceof Error).to.be.true
-    expect(caughtErr.externalExp.message).to.equal('external-before-notes')
-  })
-}
+    const t1 = retThrownErr(() => throwClientErr('op1', 'bad', { context: { id: 1 } }))
+    expect(t1 instanceof ClientError).to.be.true
+    expect((t1 as Error).message).to.equal(formatMsg('op1', 'bad', { id: 1 }))
 
-const testErrorUtils = () => {
-  it('should stringify circular and undefined context safely', async () => {
-    const context: any = { a: 1, b: undefined }
-    context.self = context
+    expect(retThrownErr(() => throwClientErrIf(false, 'op2', 'bad'))).to.equal(null)
+    const t2 = retThrownErr(() => throwClientErrIf(true, 'op2', 'bad'))
+    expect(t2 instanceof ClientError).to.be.true
 
-    const json = toJson(context)
-    expect(json.includes('"b": "undefined"')).to.be.true
-    expect(json.includes('"self": "[Circular]"')).to.be.true
+    const t3 = retThrownErr(() => throwClientErrIfUndef(undefined, 'op3', 'missing'))
+    expect(t3 instanceof ClientError).to.be.true
   })
 
-  it('should throw on undefined values via throwIfUndefined', async () => {
-    let maybeValue: string | undefined = undefined
-    const err = retThrownErr(
-      () => throwIfUndefined(maybeValue, 'read-config', 'missing config', { key: 'config' })
-    )
-    expect(err instanceof Error).to.be.true
-    expect(String((err as Error).message).includes('read-config failed: missing config')).to.be.true
-
-    maybeValue = 'ok'
-    expect(retThrownErr(
-      () => throwIfUndefined(maybeValue, 'read-config', 'missing config')
-    )).to.be.null
+  it('preserves comparable non-stack fields for deterministic checks', () => {
+    const a = FErr.from({ message: 'x', op: 'o', notes: ['n'] })
+    const b = FErr.from(a)
+    expect(omitStack(a)).to.deep.equal(omitStack(b))
   })
-
-  it('should support custom error class for throwIfUndefined', async () => {
-    class MyErr extends Error {
-      constructor(msg: string) {
-        super(msg)
-        this.name = 'MyErr'
-      }
-    }
-
-    const throwIfUndefMyErr = createThrowIfUndefined(MyErr)
-    const err = retThrownErr(
-      () => throwIfUndefMyErr(undefined, 'op1', 'missing value', { n: 1 })
-    )
-    expect(err instanceof MyErr).to.be.true
-    expect(String((err as Error).message).includes('op1 failed: missing value')).to.be.true
-  })
-}
-
-
-
-runFerrTests()
+})
