@@ -1,4 +1,4 @@
-import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil, stackStrToArr } from './utils'
+import { propIsNonEmptyString, propIsNonEmptyArray, propIsNotNil, stackStrToArr } from './ferrUtils'
 
 export const _tagFErr = '@@ferr'
 export const _defaultErrMsg = 'unkown error'
@@ -19,6 +19,7 @@ export class FErr extends Error {
   op = ''
   code = ''
   clientMsg = ''
+  context: any = null
   notes: any[] = []
   stackArr: string[] = []
   externalExp: any = null
@@ -37,6 +38,7 @@ export class FErr extends Error {
     this.op = isString(errInfo?.op) ? errInfo.op : ''
     this.code = isString(errInfo?.code) ? errInfo.code : ''
     this.clientMsg = isString(errInfo?.clientMsg) ? errInfo.clientMsg : ''
+    this.context = nil(errInfo?.context) ? null : errInfo.context
     this.notes = Array.isArray(errInfo?.notes) ? [...errInfo.notes] : []
     this.externalExp = nil(errInfo?.externalExp) ? null : errInfo.externalExp
     this.stackArr = Array.isArray(errInfo?.stackArr) ? [...errInfo.stackArr] :
@@ -48,6 +50,7 @@ export class FErr extends Error {
   setCode(code: any) { this.code = code; return this }
   setMessage(message: any) { this.message = message; return this }
   setClientMsg(clientMsg: any) { this.clientMsg = clientMsg; return this }
+  setContext(context: any) { this.context = context; return this }
   setNotes(notes: any) { this.notes = Array.isArray(notes) ? [...notes] : notes; return this }
   setStack(stack: any) {
     this.stackArr = Array.isArray(stack) ? [...stack] :
@@ -65,6 +68,7 @@ export const cloneErrInfoWIthDef = (toClone?: any) => {
     code: source.code ?? '',
     message: source.message ?? _defaultErrMsg,
     clientMsg: source.clientMsg ?? '',
+    context: source.context ?? null,
     notes: source.notes ?? [],
     stackArr: source.stackArr ?? source.stack ?? [],
     externalExp: source.externalExp ?? null,
@@ -108,6 +112,11 @@ export const getClientMsg = obj => readProp(obj, 'clientMsg')
 export const getClientMsgOrDef = obj => readPropOrDef(obj, 'clientMsg', '')
 export const setClientMsg = (val, obj) => mutateOrCopy(obj, 'clientMsg', val, target => target.setClientMsg(val))
 
+export const hasContext = propIsNotNil('context')
+export const getContext = obj => readProp(obj, 'context')
+export const getContextOrDef = obj => readPropOrDef(obj, 'context', null)
+export const setContext = (val, obj) => mutateOrCopy(obj, 'context', val, target => target.setContext(val))
+
 export const hasNotes = propIsNonEmptyArray('notes')
 export const getNotes = obj => readProp(obj, 'notes')
 export const getNotesOrDef = obj => readPropOrDef(obj, 'notes', [])
@@ -126,6 +135,20 @@ export const getStack = obj => {
   return undefined
 }
 export const getStackOrDef = obj => nil(getStack(obj)) ? [] : getStack(obj)
+export const getStackLines = obj => {
+  if (obj instanceof FErr) {
+    if (Array.isArray(obj.stackArr) && obj.stackArr.length > 0) return obj.stackArr
+    return isString(obj.stack) ? stackStrToArr(obj.stack) : []
+  }
+
+  const stackArr = readProp(obj, 'stackArr')
+  if (Array.isArray(stackArr)) return stackArr
+
+  const stack = readProp(obj, 'stack')
+  if (Array.isArray(stack)) return stack
+  if (isString(stack)) return stackStrToArr(stack)
+  return []
+}
 export const setStack = (val, obj) => {
   if (obj instanceof FErr) return obj.setStack(val)
   if (isObj(obj)) return { ...obj, stack: val }

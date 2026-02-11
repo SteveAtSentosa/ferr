@@ -2,23 +2,26 @@ import { describe, it, expect } from 'vitest'
 import {
   addNotes, addNotesFront, makeFerr, makeFerrWithDefaults, throwFerr, throwFerrIf, throwErrIfOrRet,
   isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
-  defaultErrMessage, appendErrInfo, updateErrInfo,
-} from '../src/ferr'
+  defaultErrMessage, appendErrInfo, updateErrInfo, fErrStr,
+} from '../src/ferr-depracated'
 import {
   hasOp,
   hasMessage, doesNotHaveMessage, getMessage, getMessageOrDef,
   hasDefaultMessage, doesNotHaveDefaultMessage, hasNonDefaultMessage,
-  setMessage, extractMessage, getNotes,
+  setMessage, extractMessage, getNotes, getContext,
   setStack, getStack, hasStack, doesNotHaveStack,
   _defaultErrMsg, FErr
-} from '../src/ferrAccess'
+} from '../src/fErr'
+import {
+  toJson, throwIfUndefined, createThrowIfUndefined
+} from '../src/errorUtils'
 
 import {
   doesNotHave, stackStrToArr, stackArrToStr, arrayify, flatArrayify,
   isNonEmptyString, propIsNonEmptyString, isNonEmptyArray,
   propIsNonEmptyArray, propIsNotNil, isNotObjectOrNonEmptyString,
   retThrownErr, fPipe, reflect
-} from '../src/utils'
+} from '../src/ferrUtils'
 
 import {
   testMsg, fErrWithMsg, errInfoWithCodeAndOpAndMsg, fErrWithCodeAndOp, fErrWithCodeAndOpAndMsg,
@@ -36,12 +39,14 @@ const runFerrTests = () => {
     testAccess()
     testErrorCreation()
     testErrorCreationWithExternalExceptions()
+    testErrorContext()
     testErrorNotes()
     testErrorOp()
     testErrorAppend()
     testErrorUpdate()
     testErrorThrowing()
     testErrorClassInterop()
+    testErrorUtils()
     testErrorPipelines()
   })
 }
@@ -385,6 +390,48 @@ const testErrorNotes = () => {
       fErrWithOrigNotes,
       { ...fErrDefaults, message, notes }
     )).to.be.true // non-mutation check
+  })
+}
+
+const testErrorContext = () => {
+  it('should carry context through make/append/update flows', async () => {
+    const created = makeFerr({
+      op: 'create-op',
+      message: 'create-msg',
+      context: { id: 10, nested: { ok: true } }
+    })
+    expect(getContext(created)).to.deep.equal({ id: 10, nested: { ok: true } })
+
+    const appended = appendErrInfo(
+      makeFerr({ message: 'base', context: { baseOnly: 1, shared: 'base' } }),
+      { context: { incomingOnly: 2, shared: 'incoming' } }
+    )
+    expect(getContext(appended)).to.deep.equal({
+      baseOnly: 1,
+      incomingOnly: 2,
+      shared: 'base'
+    })
+
+    const updated = updateErrInfo(
+      makeFerr({ message: 'base', context: { baseOnly: 1, shared: 'base' } }),
+      { context: { incomingOnly: 2, shared: 'incoming' } }
+    )
+    expect(getContext(updated)).to.deep.equal({
+      baseOnly: 1,
+      incomingOnly: 2,
+      shared: 'incoming'
+    })
+  })
+
+  it('should include context in formatted ferr strings', async () => {
+    const withContext = makeFerr({
+      op: 'fmt-op',
+      message: 'fmt-msg',
+      context: { k: 'v', keepUndefined: undefined }
+    })
+    const msg = fErrStr(withContext)
+    expect(msg.includes('Context:')).to.be.true
+    expect(msg.includes('"keepUndefined": "undefined"')).to.be.true
   })
 }
 
@@ -799,6 +846,47 @@ const testErrorClassInterop = () => {
     expect(getNotes(caughtErr)).to.deep.equal(['added-note', 'external-before-notes'])
     expect(caughtErr.externalExp instanceof Error).to.be.true
     expect(caughtErr.externalExp.message).to.equal('external-before-notes')
+  })
+}
+
+const testErrorUtils = () => {
+  it('should stringify circular and undefined context safely', async () => {
+    const context: any = { a: 1, b: undefined }
+    context.self = context
+
+    const json = toJson(context)
+    expect(json.includes('"b": "undefined"')).to.be.true
+    expect(json.includes('"self": "[Circular]"')).to.be.true
+  })
+
+  it('should throw on undefined values via throwIfUndefined', async () => {
+    let maybeValue: string | undefined = undefined
+    const err = retThrownErr(
+      () => throwIfUndefined(maybeValue, 'read-config', 'missing config', { key: 'config' })
+    )
+    expect(err instanceof Error).to.be.true
+    expect(String((err as Error).message).includes('read-config failed: missing config')).to.be.true
+
+    maybeValue = 'ok'
+    expect(retThrownErr(
+      () => throwIfUndefined(maybeValue, 'read-config', 'missing config')
+    )).to.be.null
+  })
+
+  it('should support custom error class for throwIfUndefined', async () => {
+    class MyErr extends Error {
+      constructor(msg: string) {
+        super(msg)
+        this.name = 'MyErr'
+      }
+    }
+
+    const throwIfUndefMyErr = createThrowIfUndefined(MyErr)
+    const err = retThrownErr(
+      () => throwIfUndefMyErr(undefined, 'op1', 'missing value', { n: 1 })
+    )
+    expect(err instanceof MyErr).to.be.true
+    expect(String((err as Error).message).includes('op1 failed: missing value')).to.be.true
   })
 }
 

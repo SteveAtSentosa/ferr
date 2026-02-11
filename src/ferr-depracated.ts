@@ -1,15 +1,16 @@
 import { pipe } from 'remeda'
 import {
   flatArrayify, stackStrToArr, stackStrToStackArr, tab, msgListToStr, isNonEmptyArray,
-} from './utils'
-import { curryLast } from './stcline'
+  curryLast,
+} from './ferrUtils'
+import { toJson } from './errorUtils'
 // to reexport
 import {
   isFerr,
   isNotFerr,
   FErr
-} from './ferrAccess'
-import * as FE from './ferrAccess'
+} from './fErr'
+import * as FE from './fErr'
 
 
 // TODO:
@@ -35,6 +36,14 @@ const isNotObject = (toCheck: any) => !isObject(toCheck)
 
 const isExternalExp = toCheck =>
   isNotFerr(toCheck) && FE.hasMessage(toCheck) && FE.hasStack(toCheck)
+
+const mergeContext = (primaryContext: any, secondaryContext: any) => {
+  if (!FE.hasContext({ context: secondaryContext })) return primaryContext
+  if (!FE.hasContext({ context: primaryContext })) return secondaryContext
+  if (isObject(primaryContext) && isObject(secondaryContext))
+    return { ...secondaryContext, ...primaryContext }
+  return primaryContext
+}
 
 // create an fErr given errInfo
 // errInfo {
@@ -91,6 +100,7 @@ export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) => {
     code: safeErrInfo.code || safeDefaults.code,
     message: safeErrInfo.message || safeDefaults.message,
     clientMsg: safeErrInfo.clientMsg || safeDefaults.clientMsg,
+    context: safeErrInfo.context || safeDefaults.context,
     notes: safeErrInfo.notes || safeDefaults.notes,
     externalExp: safeErrInfo.externalExp || safeDefaults.externalExp,
   })
@@ -182,6 +192,9 @@ const mergeErrInfo = (primaryErrInfo, secondaryErrInfo, notesFront = false) => {
       FE.setClientMsg(FE.getClientMsg(sourceErr), targetFerr)
   }
 
+  const mergedContext = mergeContext(FE.getContext(targetFerr), FE.getContext(sourceErr))
+  if (FE.hasContext({ context: mergedContext }))
+    targetFerr = FE.setContext(mergedContext, targetFerr)
 
   // append any incoming notes
   if (FE.hasNotes(sourceErr))
@@ -220,7 +233,7 @@ const fErrToMsgList = (fErr, tabStr='') => {
   }
 
   const {
-    clientMsg = '', code = '', notes = [], externalExp = null
+    clientMsg = '', code = '', context = null, notes = [], externalExp = null
   } = fErr
 
   const msgList = ['\nERROR encountered !!']
@@ -231,11 +244,13 @@ const fErrToMsgList = (fErr, tabStr='') => {
     msgList.push('Notes:')
     notes.forEach(note => msgList.push(tab(note)))
   }
+  if (context !== null && context !== undefined) {
+    msgList.push('Context:')
+    msgList.push(tab(toJson(context)))
+  }
 
   msgList.push('Call Stack:')
-  const stackLines = FE.getStackOrDef(fErr)
-  if (Array.isArray(stackLines))
-    stackLines.forEach(line => msgList.push(tab(line)))
+  FE.getStackLines(fErr).forEach(line => msgList.push(tab(line)))
 
   const e = externalExp
   if (e) {

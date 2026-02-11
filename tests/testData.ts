@@ -1,4 +1,4 @@
-import { makeFerr, testExports } from '../src/ferr'
+import { makeFerr, testExports } from '../src/ferr-depracated'
 const { _defaultErrMsg } = testExports
 
 // leaving off call stack (matching on call stack is not practical)
@@ -10,6 +10,7 @@ export const fErrDefaults = {
   code: '',
   message: _defaultErrMsg,
   clientMsg: '',
+  context: null,
   notes: [],
   externalExp: null
 }
