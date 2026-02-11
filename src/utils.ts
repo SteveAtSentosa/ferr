@@ -5,7 +5,7 @@
 
 import {
   flatten, drop, concat, not, any, complement, has, prop,
-  assoc, curry, head
+  curry, head
 } from 'ramda'
 import {
   isArray, isString, isNotObject, isNilOrEmpty, isNotNil
@@ -57,7 +57,7 @@ export const fPipe = (...funcs: any[]) => (x?: any) => funcs.reduce(applyAsync, 
 // ----- the line --------------------------------------------------
 
 export const copyProp = (propName, sourceObj={}, targetObj={}) =>
-  has(propName, sourceObj) ? assoc(propName, sourceObj[propName], targetObj) : targetObj
+  has(propName, sourceObj) ? { ...targetObj, [propName]: sourceObj[propName] } : targetObj
 
 export const plainObject = classInstance => Object.assign({}, classInstance)
 

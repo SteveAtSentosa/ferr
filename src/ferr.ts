@@ -75,15 +75,19 @@ export const makeFerr = (errInfo: any = FE._defaultErrMsg)  => {
 
 // TODO: add tests
 // return errInfo Objects with supplied values or defaults
-export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) =>
-  makeFerr({
-    op: errInfo.op || errInfoDefaults.op,
-    code: errInfo.code || errInfoDefaults.code,
-    message: errInfo.message || errInfoDefaults.message,
-    clientMsg: errInfo.clientMsg || errInfoDefaults.clientMsg,
-    notes: errInfo.notes || errInfoDefaults.notes,
-    externalExp: errInfo.externalExp || errInfoDefaults.externalExp,
+export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) => {
+  const safeErrInfo = (isObject(errInfo) ? errInfo : {}) as any
+  const safeDefaults = (isObject(errInfoDefaults) ? errInfoDefaults : {}) as any
+
+  return makeFerr({
+    op: safeErrInfo.op || safeDefaults.op,
+    code: safeErrInfo.code || safeDefaults.code,
+    message: safeErrInfo.message || safeDefaults.message,
+    clientMsg: safeErrInfo.clientMsg || safeDefaults.clientMsg,
+    notes: safeErrInfo.notes || safeDefaults.notes,
+    externalExp: safeErrInfo.externalExp || safeDefaults.externalExp,
   })
+}
 
 
 // Return an fErr derived from original fErr, with notes added

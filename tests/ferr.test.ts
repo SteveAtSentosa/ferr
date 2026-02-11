@@ -1,7 +1,7 @@
 import { omit, equals } from 'ramda'
 import { describe, it, expect } from 'vitest'
 import {
-  addNotes, addNotesFront, makeFerr, throwFerr, throwFerrIf, throwErrIfOrRet,
+  addNotes, addNotesFront, makeFerr, makeFerrWithDefaults, throwFerr, throwFerrIf, throwErrIfOrRet,
   isFerr, isNotFerr, reThrowWithFerr, reThrowWithNotes, reThrowWithOp, updateOp,
   defaultErrMessage, appendErrInfo, updateErrInfo,
 } from '../src/ferr'
@@ -240,6 +240,25 @@ const testErrorCreation = () =>
     expect(areEquivErrs(
       makeFerr(incomingErrInfoWithMsgAndNotes),
       fErrWithMsgAndNotes
+    )).to.be.true
+
+    const fallbackDefaults = {
+      op: 'default-op',
+      code: 'default-code',
+      message: 'default-message',
+      clientMsg: 'default-client-msg',
+      notes: ['default-note'],
+      externalExp: null
+    }
+
+    expect(areEquivErrs(
+      makeFerrWithDefaults(undefined, fallbackDefaults),
+      makeFerr(fallbackDefaults)
+    )).to.be.true
+
+    expect(areEquivErrs(
+      makeFerrWithDefaults(null, fallbackDefaults),
+      makeFerr(fallbackDefaults)
     )).to.be.true
   })
 

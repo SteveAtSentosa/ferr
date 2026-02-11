@@ -42,7 +42,7 @@
     "vitest": "^4.0.18"
   },
   "scripts": {
-    "lint": "eslint . --ext .js,.ts",
+    "lint": "eslint .",
     "build": "pnpm run clean && tsup",
     "build:tests": "tsc -p tsconfig.test.json",
     "test": "vitest --run",
