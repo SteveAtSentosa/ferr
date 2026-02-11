@@ -5,6 +5,7 @@ const { _defaultErrMsg } = testExports
 // matches defaults created by makeErr
 export const fErrDefaults = {
   _tag: '@@ferr',
+  name: 'FErr',
   op: '',
   code: '',
   message: _defaultErrMsg,
@@ -80,4 +81,3 @@ export const fErrWithCodeAndOp = makeFerr(errInfoWithCodeAndOp)
 export const fErrWithCodeAndOpAndMsg = makeFerr(errInfoWithCodeAndOpAndMsg)
 export const fErrWithMsgAndNotes = makeFerr(incomingErrInfoWithMsgAndNotes)
 export const fErrWithAll = makeFerr(incomingErrInfoWithAll)
-

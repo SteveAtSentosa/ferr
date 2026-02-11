@@ -10,7 +10,7 @@ import {
   hasDefaultMessage, doesNotHaveDefaultMessage, hasNonDefaultMessage,
   setMessage, extractMessage, getNotes,
   setStack, getStack, hasStack, doesNotHaveStack,
-  _defaultErrMsg,
+  _defaultErrMsg, FErr
 } from '../src/ferrAccess'
 
 import {
@@ -48,7 +48,7 @@ const runFerrTests = () => {
 // we will skip stack comparisons
 const omitStack = fErr => {
   if (!fErr || typeof fErr !== 'object') return fErr
-  const { stack, ...rest } = fErr
+  const { stack, stackArr, ...rest } = fErr
   return rest
 }
 const areEquivErrs = (fErr1, fErr2) => {
@@ -119,6 +119,8 @@ const testTypes = () => {
   it('should detect fErr types correctly', () => {
     expect(isFerr(makeFerr())).to.be.true
     expect(isFerr(makeFerr('dude'))).to.be.true
+    expect(makeFerr() instanceof Error).to.be.true
+    expect(makeFerr() instanceof FErr).to.be.true
     expect(isFerr({ message: 'dude' })).to.be.false
     expect(isFerr('message')).to.be.false
     expect(isFerr(['message'])).to.be.false
@@ -196,18 +198,18 @@ const testErrorCreation = () =>
 
     // test no error info given
     const fErrNoInfo = makeFerr()
-    expect(fErrNoInfo.stack).to.be.an.instanceof(Array)
+    expect(getStack(fErrNoInfo)).to.be.an.instanceof(Array)
     expect(areEquivErrs(fErrNoInfo, fErrDefaults)).to.be.true
 
     // test only string given
     const fErrFromString = makeFerr('test-error')
-    expect(fErrFromString.stack).to.be.an.instanceof(Array)
+    expect(getStack(fErrFromString)).to.be.an.instanceof(Array)
     expect(areEquivErrs(fErrFromString, setMessage('test-error', fErrDefaults))).to.be.true
 
     // test partial error info given
     const partialErrInfo = { op: 'partial-op', message: 'partial-msg', externalExp, }
     const fErrFromPartialInfo = makeFerr(partialErrInfo)
-    expect(fErrFromPartialInfo.stack).to.be.an.instanceof(Array)
+    expect(getStack(fErrFromPartialInfo)).to.be.an.instanceof(Array)
 
     expect(areEquivErrs(fErrFromPartialInfo, {
       ...fErrDefaults,
@@ -221,7 +223,7 @@ const testErrorCreation = () =>
       clientMsg: 'full-client-msg', notes: ['some', 'note'], externalExp
     }
     const fErrFromFullInfo = makeFerr(fullErrInfo)
-    expect(fErrFromFullInfo.stack).to.be.an.instanceof(Array)
+    expect(getStack(fErrFromFullInfo)).to.be.an.instanceof(Array)
     expect(areEquivErrs(fErrFromFullInfo, {
       ...fErrDefaults,
       ...fullErrInfo,
@@ -403,44 +405,52 @@ const testErrorOp = () => {
 
 const testErrorAppend = () => {
   it('should copy over non-existant props for append', async () => {
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithOp)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithOp
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithCode)).to.deep.equal({
-      ...fErrDefult, ...incomingErrInfoWithCode
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithMsg)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithMsg
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithClientMsg)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithClientMsg
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithNotes)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithNotes,
-      message: incomingErrInfoWithNotes.notes[0]
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithExternaExp)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithExternaExp,
-      message: incomingErrInfoWithExternaExp.externalExp.message
-    })
-    expect(appendErrInfo(fErrDefult, incomingErrInfoWithAll)).to.deep.equal({
-      ...fErrDefult,
-      ...incomingErrInfoWithAll,
-      notes: [
-        ...incomingErrInfoWithAll.notes,
-        incomingErrInfoWithAll.externalExp.message
-      ]
-    })
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithOp), {
+        ...fErrDefult,
+        ...incomingErrInfoWithOp
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithCode), {
+        ...fErrDefult, ...incomingErrInfoWithCode
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithMsg), {
+        ...fErrDefult,
+        ...incomingErrInfoWithMsg
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithClientMsg), {
+        ...fErrDefult,
+        ...incomingErrInfoWithClientMsg
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithNotes), {
+        ...fErrDefult,
+        ...incomingErrInfoWithNotes,
+        message: incomingErrInfoWithNotes.notes[0]
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithExternaExp), {
+        ...fErrDefult,
+        ...incomingErrInfoWithExternaExp,
+        message: incomingErrInfoWithExternaExp.externalExp.message
+      })).to.be.true
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, incomingErrInfoWithAll), {
+        ...fErrDefult,
+        ...incomingErrInfoWithAll,
+        notes: [
+          ...incomingErrInfoWithAll.notes,
+          incomingErrInfoWithAll.externalExp.message
+        ]
+      })).to.be.true
     // test with msg string input
-    expect(appendErrInfo(fErrDefult, 'string-only-msg')).to.deep.equal({
-      ...fErrDefult,
-      message: 'string-only-msg'
-    })
+    expect(areEquivErrs(
+      appendErrInfo(fErrDefult, 'string-only-msg'), {
+        ...fErrDefult,
+        message: 'string-only-msg'
+      })).to.be.true
   })
 
   it('should append existing props to message/notes', async () => {
@@ -638,8 +648,8 @@ const testErrorThrowing = () => {
   it('should conditionally throw errors correctly', async () => {
     expect(areEquivErrs(retThrownErr(throwFerrIf, true, fErrWithCodeAndOp), fErrWithCodeAndOp)).to.be.true
     expect(areEquivErrs(retThrownErr(throwFerrIf, 10 > 1, {}), fErrDefult)).to.be.true
-    expect(retThrownErr(throwFerrIf, false, fErrWithCodeAndOp), fErrWithCodeAndOp).to.be.null
-    expect(retThrownErr(throwFerrIf, 10 < 1, {}), fErrDefult).to.be.null
+    expect(retThrownErr(throwFerrIf, false, fErrWithCodeAndOp)).to.be.null
+    expect(retThrownErr(throwFerrIf, 10 < 1, {})).to.be.null
   })
 
   it('should conditionally throw errors or return specified value', async () => {

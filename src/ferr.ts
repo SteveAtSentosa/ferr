@@ -6,7 +6,8 @@ import { curryLast } from './stcline'
 // to reexport
 import {
   isFerr,
-  isNotFerr
+  isNotFerr,
+  FErr
 } from './ferrAccess'
 import * as FE from './ferrAccess'
 
@@ -48,7 +49,7 @@ const isExternalExp = toCheck =>
 // {errInfo} | 'msg' | externalExp | {fErr} -> fErr
 export const makeFerr = (errInfo: any = FE._defaultErrMsg)  => {
 
-  if (isFerr(errInfo)) return errInfo
+  if (isFerr(errInfo)) return FE.cloneErrInfoWIthDef(errInfo)
 
   // create the starting fErr object
   let fErr = FE.cloneErrInfoWIthDef(
@@ -99,13 +100,15 @@ export const makeFerrWithDefaults = (errInfo: any, errInfoDefaults: any) => {
 // Return an fErr derived from original fErr, with notes added
 // '' | [''] -> fErr -> fErr
 export const addNotes = curryLast((noteOrNoteList, fErr) => {
-  const newNoteList = [...FE.getNotesOrDef(fErr), ...flatArrayify(noteOrNoteList)]
-  return FE.setNotes(newNoteList, fErr)
+  const targetFerr = makeFerr(fErr)
+  const newNoteList = [...FE.getNotesOrDef(targetFerr), ...flatArrayify(noteOrNoteList)]
+  return FE.setNotes(newNoteList, targetFerr)
 })
 
 export const addNotesFront = curryLast((noteOrNoteList, fErr) => {
-  const newNoteList = [...flatArrayify(noteOrNoteList), ...FE.getNotesOrDef(fErr)]
-  return FE.setNotes(newNoteList, fErr)
+  const targetFerr = makeFerr(fErr)
+  const newNoteList = [...flatArrayify(noteOrNoteList), ...FE.getNotesOrDef(targetFerr)]
+  return FE.setNotes(newNoteList, targetFerr)
 })
 
 // Apply a message string or object to an existing fErr
@@ -230,8 +233,9 @@ const fErrToMsgList = (fErr, tabStr='') => {
   }
 
   msgList.push('Call Stack:')
-  ;
-  (fErr?.stack ?? []).forEach(line => msgList.push(tab(line)))
+  const stackLines = FE.getStackOrDef(fErr)
+  if (Array.isArray(stackLines))
+    stackLines.forEach(line => msgList.push(tab(line)))
 
   const e = externalExp
   if (e) {
@@ -256,8 +260,9 @@ export const updateOp = (op, fErr) => {
   if (isNotFerr(fErr))
     return makeFerr({ op, externalExp: fErr })
 
-  const outGoingFerr = FE.hasOp(fErr) ?
-    addNotesFront(FE.getOp(fErr), fErr) : fErr
+  const targetFerr = makeFerr(fErr)
+  const outGoingFerr = FE.hasOp(targetFerr) ?
+    addNotesFront(FE.getOp(targetFerr), targetFerr) : targetFerr
 
   return FE.setOp(op, outGoingFerr)
 }
@@ -319,6 +324,7 @@ export const throwErrIfOrRet = (toRetIfConditionIsFalse, condition, errInfo) => 
 
 // passthrough exports
 export {
+  FErr,
   isFerr,
   isNotFerr,
 }
