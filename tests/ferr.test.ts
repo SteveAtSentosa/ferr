@@ -5,6 +5,7 @@ import {
   createThrowErrIf,
   createThrowIfUndefined,
   formatMsg,
+  rethrowFerr,
   rethrowAppend,
   rethrowUpdate,
   throwErr,
@@ -392,6 +393,22 @@ describe('FErr class-first API', () => {
     expect((conditional as FErr).message).to.equal('cond')
   })
 
+  it('supports wrapper throw semantics via throwFerr({ with: ... })', () => {
+    const thrown = retThrownErr(() => throwFerr({
+      with: {
+        op: 'api.handleRequest',
+        message: 'Request failed',
+        code: 'REQUEST_FAILED',
+        context: { requestId: 'r1' }
+      }
+    })) as FErr
+
+    expect(thrown.op).to.equal('api.handleRequest')
+    expect(thrown.message).to.equal('Request failed')
+    expect(thrown.code).to.equal('REQUEST_FAILED')
+    expect(thrown.context).to.deep.equal({ requestId: 'r1' })
+  })
+
   it('throws formatted operation errors via throwErr and throwErrIf', () => {
     const thrown = retThrownErr(() => throwErr('load', 'failed', { context: { id: 1 } })) as FErr
     expect(thrown instanceof FErr).to.be.true
@@ -412,6 +429,41 @@ describe('FErr class-first API', () => {
     const updated = retThrownErr(() => rethrowUpdate({ message: 'existing' }, { message: 'incoming' })) as FErr
     expect(updated.message).to.equal('incoming')
     expect(updated.notes).to.include('existing')
+  })
+
+  it('supports wrapper rethrow semantics via rethrowFerr(err, { with: ... })', () => {
+    const updateThrown = retThrownErr(() => rethrowFerr(
+      new FErr({ op: 'db.call', message: 'db failed' }),
+      {
+        with: {
+          op: 'api.handleRequest',
+          message: 'Request failed',
+          code: 'REQUEST_FAILED',
+          context: { requestId: 'r1' }
+        }
+      }
+    )) as FErr
+
+    expect(updateThrown.op).to.equal('api.handleRequest')
+    expect(updateThrown.message).to.equal('Request failed')
+    expect(updateThrown.code).to.equal('REQUEST_FAILED')
+    expect(updateThrown.notes).to.include('db failed')
+
+    const appendThrown = retThrownErr(() => rethrowFerr(
+      new FErr({ op: 'db.call', message: 'db failed' }),
+      {
+        mode: 'append',
+        with: {
+          op: 'api.handleRequest',
+          message: 'Request failed',
+          code: 'REQUEST_FAILED',
+        }
+      }
+    )) as FErr
+
+    expect(appendThrown.op).to.equal('db.call')
+    expect(appendThrown.message).to.equal('db failed')
+    expect(appendThrown.notes).to.include('Request failed')
   })
 
   it('supports throwIfUndefined assertions', () => {

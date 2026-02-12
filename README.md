@@ -17,14 +17,6 @@ Most production errors are not one event. They are a chain:
 
 The goal is not "fancy exceptions." The goal is readable, mergeable, diagnosable errors that survive multiple layers without losing meaning.
 
-## Core design choices
-
-- Class-first: `FErr extends Error`
-- Immutable operations: `with*`, `mergeAppend`, `mergeUpdate`
-- Unknown-safe coercion: `FErr.from(unknown)`
-- Context-safe formatting: circular-safe JSON output
-- Predictable merge semantics with tests
-
 ## Install
 
 ```bash
@@ -77,44 +69,26 @@ const merged = appErr.mergeAppend(externalErr)
 4. Throw helpers for guard clauses
 
 ```ts
-import { throwErrIf, throwIfUndefined } from 'ferr'
+import { rethrowFerr, throwFerr, throwIfUndefined } from 'ferr'
 
-throwErrIf(!isAuthorized, 'authorize', 'Unauthorized', { context: { userId } })
+throwFerr({
+  with: {
+    op: 'authorize',
+    message: 'Unauthorized',
+    context: { userId }
+  }
+})
+
+try {
+  await doWork()
+} catch (e) {
+  rethrowFerr(e, {
+    with: { op: 'api.handleRequest', code: 'REQUEST_FAILED', message: 'Request failed' }
+  })
+}
+
 throwIfUndefined(config, 'boot', 'Missing config')
 ```
-
-## Merge semantics
-
-`ferr` provides two explicit merge modes.
-
-### `mergeAppend(primary, secondary)`
-
-Primary wins conflicts. Secondary conflicts are preserved in `notes`.
-
-Use this when the current layer's error identity should remain the source of truth.
-
-### `mergeUpdate(existing, incoming)`
-
-Incoming wins conflicts.
-
-Use this when a newer layer should become the current error identity.
-
-Both modes preserve context and cause details without throwing away earlier information.
-
-## Cause and message behavior
-
-`cause` can be:
-
-- `Error`
-- `string`
-- `Record<string, unknown>`
-- `null`
-
-`FErr.from(...)` rules:
-
-- default message + cause message => adopt cause message
-- non-default message + different cause message => add cause message to notes
-- same message => no duplicate note
 
 ## API overview
 
@@ -131,6 +105,7 @@ Both modes preserve context and cause details without throwing away earlier info
 ### Throw/rethrow helpers
 
 - `throwFerr`, `throwFerrIf`
+- `rethrowFerr`
 - `throwErr`, `throwErrIf`
 - `rethrowAppend`, `rethrowUpdate`
 - `throwIfUndefined`

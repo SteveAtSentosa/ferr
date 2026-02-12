@@ -14,6 +14,45 @@ export interface ThrowOptions {
   notes?: string | string[]
 }
 
+/**
+ * Wrapper-style payload for `throwFerr({ with: ... })`.
+ * `op` and `message` are required in this shape.
+ */
+export interface ThrowFerrRequest {
+  with: Required<Pick<FErrOptions, 'op' | 'message'>> & Partial<FErrOptions>
+  notes?: string | string[]
+}
+
+/**
+ * Wrapper-style payload for `rethrowFerr(err, { with: ... })`.
+ * Defaults to `update` mode.
+ */
+export interface RethrowFerrRequest {
+  with?: Partial<FErrOptions>
+  notes?: string | string[]
+  mode?: 'update' | 'append'
+}
+
+const isStringArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every(item => typeof item === 'string')
+
+const toNotes = (notes: unknown): string[] =>
+  typeof notes === 'string' ? [notes] :
+  isStringArray(notes) ? notes :
+  []
+
+const mergeNotes = (a: unknown, b: unknown): string[] => {
+  const merged = [...toNotes(a), ...toNotes(b)]
+  return [...new Set(merged)]
+}
+
+const isThrowFerrRequest = (input: unknown): input is ThrowFerrRequest =>
+  !!input &&
+  typeof input === 'object' &&
+  'with' in input &&
+  typeof (input as { with?: { op?: unknown, message?: unknown } }).with?.op === 'string' &&
+  typeof (input as { with?: { op?: unknown, message?: unknown } }).with?.message === 'string'
+
 const toFerrOptions = (message: string, options: ThrowOptions = {}): FErrOptions => ({
   message,
   op: options.op,
@@ -38,6 +77,15 @@ export const formatMsg = (op: string, message: string, context?: unknown): strin
  * Throw an `FErr` from unknown input.
  */
 export const throwFerr = (input: unknown, overrides?: Partial<FErrOptions>): never => {
+  if (isThrowFerrRequest(input)) {
+    const withPatch = input.with
+    const notes = mergeNotes(withPatch.notes, input.notes)
+    throw FErr.from({
+      ...withPatch,
+      notes
+    })
+  }
+
   throw FErr.from(input, overrides)
 }
 
@@ -83,6 +131,24 @@ export const rethrowAppend = (existing: unknown, incoming: unknown): never => {
  */
 export const rethrowUpdate = (existing: unknown, incoming: unknown): never => {
   throw FErr.from(existing).mergeUpdate(incoming)
+}
+
+/**
+ * Wrapper-style rethrow helper.
+ *
+ * Defaults to update semantics:
+ * `rethrowFerr(err, { with: { op, code, ... } })`
+ */
+export const rethrowFerr = (caught: unknown, options: RethrowFerrRequest): never => {
+  const patch: Partial<FErrOptions> = {
+    ...(options.with || {}),
+    notes: mergeNotes(options.with?.notes, options.notes)
+  }
+
+  if (options.mode === 'append')
+    throw FErr.from(caught).mergeAppend(patch)
+
+  throw FErr.from(caught).mergeUpdate(patch)
 }
 
 /**
