@@ -1,10 +1,29 @@
 import { msgListToStr, stackStrToArr, tab, toJson } from './ferrUtils'
 
+/**
+ * Default message used when no explicit message can be derived.
+ */
 export const DEFAULT_FERR_MESSAGE = 'unknown error'
 
+/**
+ * Accepted input for note updates.
+ */
 export type FErrNotesInput = string | string[]
+/**
+ * Canonical cause payload supported by {@link FErr}.
+ * - `Error`: structured runtime errors
+ * - `string`: lightweight cause message
+ * - `Record<string, unknown>`: structured metadata
+ * - `null`: no cause
+ */
 export type FErrCause = Error | string | Record<string, unknown> | null
 
+/**
+ * Construction options for {@link FErr}.
+ *
+ * All fields are optional and have safe defaults.
+ * `stackLines` is primarily for deterministic tests or custom formatting flows.
+ */
 export interface FErrOptions {
   message?: string
   op?: string
@@ -160,6 +179,12 @@ export class FErr extends Error {
   override readonly cause: FErrCause
   readonly stackLines: string[]
 
+  /**
+   * Create a strongly-typed `Error` with operational context.
+   *
+   * Constructor input is object-based (not positional) so callers can provide
+   * only the fields they have without brittle argument ordering.
+   */
   constructor(options: FErrOptions = {}) {
     const message = isNonEmptyString(options.message) ? options.message : DEFAULT_FERR_MESSAGE
     super(message, isNil(options.cause) ? undefined : { cause: options.cause })
@@ -186,14 +211,28 @@ export class FErr extends Error {
     Object.setPrototypeOf(this, new.target.prototype)
   }
 
+  /**
+   * Runtime type guard.
+   */
   static is(value: unknown): value is FErr {
     return value instanceof FErr
   }
 
-  // Coercion rules:
-  // - If message is default and cause has a message/string, adopt it.
-  // - If message is non-default and cause has a different message/string, append it to notes.
-  // - Raw string cause is intentionally supported and treated as a valid cause message.
+  /**
+   * Coerce unknown input into `FErr`.
+   *
+   * Supported input:
+   * - `FErr` (cloned, optionally patched)
+   * - `Error`
+   * - `string` message
+   * - plain object with ferr-like keys
+   * - anything else (safe defaults)
+   *
+   * Message/cause rules:
+   * - If message is default and cause has a message/string, adopt cause message.
+   * - If message is non-default and cause has a different message/string, append to notes.
+   * - Raw string causes are intentionally supported.
+   */
   static from(input: unknown, overrides: Partial<FErrOptions> = {}): FErr {
     if (input instanceof FErr) {
       return new FErr({
@@ -225,10 +264,18 @@ export class FErr extends Error {
     return ferr
   }
 
+  /**
+   * Merge with append precedence (primary wins conflicts).
+   * Conflicting secondary fields are preserved in notes.
+   */
   static mergeAppend(primary: unknown, secondary: unknown): FErr {
     return mergeAppend(FErr.from(primary), FErr.from(secondary))
   }
 
+  /**
+   * Merge with update precedence (incoming wins conflicts).
+   * Equivalent to mergeAppend with argument order swapped.
+   */
   static mergeUpdate(existing: unknown, incoming: unknown): FErr {
     return mergeAppend(FErr.from(incoming), FErr.from(existing))
   }
@@ -238,10 +285,16 @@ export class FErr extends Error {
     return this.cause
   }
 
+  /**
+   * Get a message-like string from cause when available.
+   */
   getCauseMessage(): string | null {
     return messageFromCause(this.cause)
   }
 
+  /**
+   * Export normalized instance fields for cloning/patching.
+   */
   toOptions(): FErrOptions {
     return {
       op: this.op,
@@ -255,6 +308,9 @@ export class FErr extends Error {
     }
   }
 
+  /**
+   * Export a plain JSON-friendly object.
+   */
   toJSON(): Record<string, unknown> {
     return {
       name: this.name,
@@ -269,6 +325,9 @@ export class FErr extends Error {
     }
   }
 
+  /**
+   * Immutable patch operation.
+   */
   with(patch: Partial<FErrOptions>): FErr {
     return new FErr({
       ...this.toOptions(),
@@ -278,40 +337,57 @@ export class FErr extends Error {
     })
   }
 
+  /** Return a copy with updated `message`. */
   withMessage(message: string): FErr {
     return this.with({ message })
   }
 
+  /** Return a copy with updated `op`. */
   withOp(op: string): FErr {
     return this.with({ op })
   }
 
+  /** Return a copy with updated `code`. */
   withCode(code: string): FErr {
     return this.with({ code })
   }
 
+  /** Return a copy with updated `clientMsg`. */
   withClientMsg(clientMsg: string): FErr {
     return this.with({ clientMsg })
   }
 
+  /** Return a copy with updated `context`. */
   withContext(context: unknown): FErr {
     return this.with({ context })
   }
 
+  /** Return a copy with updated `cause`. */
   withCause(cause: unknown): FErr {
     return this.with({ cause })
   }
 
+  /**
+   * Return a copy with notes appended or prepended.
+   */
   withNotes(notes: FErrNotesInput, position: 'append' | 'prepend' = 'append'): FErr {
     const incoming = toNoteList(notes)
     const next = position === 'prepend' ? [...incoming, ...this.notes] : [...this.notes, ...incoming]
     return this.with({ notes: next })
   }
 
+  /**
+   * Short one-line message, suitable for logs and metrics tags.
+   */
   toMessageString(): string {
     return `${this.op ? `${this.op} - ` : ''}${this.message}`
   }
 
+  /**
+   * Full multi-line human-readable diagnostic block.
+   *
+   * Includes message metadata, notes, context, stack and cause details.
+   */
   toDetailedString(): string {
     const lines = ['\nERROR encountered !!']
     lines.push(tab(`Msg: ${this.toMessageString()}`) as string)
@@ -349,23 +425,40 @@ export class FErr extends Error {
     return msgListToStr(lines)
   }
 
+  /**
+   * Instance wrapper for append-style merge.
+   */
   mergeAppend(incoming: unknown): FErr {
     return FErr.mergeAppend(this, incoming)
   }
 
+  /**
+   * Instance wrapper for update-style merge.
+   */
   mergeUpdate(incoming: unknown): FErr {
     return FErr.mergeUpdate(this, incoming)
   }
 
+  /**
+   * Throw merged error using append precedence.
+   */
   rethrowAppend(incoming: unknown): never {
     throw this.mergeAppend(incoming)
   }
 
+  /**
+   * Throw merged error using update precedence.
+   */
   rethrowUpdate(incoming: unknown): never {
     throw this.mergeUpdate(incoming)
   }
 }
 
+/** Convenience alias for {@link FErr.is}. */
 export const isFerr = FErr.is
+/** Negated convenience check for {@link FErr.is}. */
 export const isNotFerr = (value: unknown): boolean => !FErr.is(value)
+/**
+ * Read normalized stack lines for unknown input via `FErr.from`.
+ */
 export const getStackLines = (value: unknown): string[] => FErr.from(value).stackLines

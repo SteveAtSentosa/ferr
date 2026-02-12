@@ -1,4 +1,6 @@
-// Consolidated ferr utility helpers.
+/**
+ * Consolidated utility helpers used across ferr internals and tests.
+ */
 
 type AnyFn = (...args: any[]) => any
 
@@ -22,7 +24,13 @@ const getProp = (obj: any, propName: string) =>
 const complement = (pred: (...args: any[]) => boolean) =>
   (...args: any[]) => !pred(...args)
 
+/**
+ * Wrap any value as an array.
+ */
 export const arrayify = <T>(input: T | T[]): T[] => Array.isArray(input) ? input : [input]
+/**
+ * Deep-flatten value(s) into a one-dimensional array.
+ */
 export const flatArrayify = (input: unknown): unknown[] => arrayify(input as unknown | unknown[]).flat(Infinity) as unknown[]
 
 // if toCheck is an array, return first element, otherwise return toCheck
