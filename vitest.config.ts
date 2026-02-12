@@ -6,5 +6,15 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**'],
     globals: true,
     environment: 'node',
+    coverage: {
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/coverage/**',
+        '**/*depracated*.ts',
+        '**/*deprecated*.ts',
+        '**/vizualize/**',
+      ],
+    },
   },
 })

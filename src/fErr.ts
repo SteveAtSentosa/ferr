@@ -99,33 +99,45 @@ const mergeContext = (preferred: unknown, secondary: unknown): unknown => {
 
 const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
   const noteList: string[] = [...preferred.notes]
+  const addNote = (note: string): void => {
+    if (!noteList.includes(note)) noteList.push(note)
+  }
 
   let code = preferred.code
   if (secondary.code) {
-    if (code) noteList.push(`Code: ${secondary.code}`)
+    if (code) addNote(`Code: ${secondary.code}`)
     else code = secondary.code
   }
 
   let op = preferred.op
   if (secondary.op) {
-    if (op) noteList.push(`Op: ${secondary.op}`)
+    if (op) addNote(`Op: ${secondary.op}`)
     else op = secondary.op
   }
 
   let message = preferred.message
   const secondaryMessage = secondary.message
   if (nonDefaultMessage(secondaryMessage)) {
-    if (nonDefaultMessage(message)) noteList.push(secondaryMessage)
+    if (nonDefaultMessage(message)) addNote(secondaryMessage)
     else message = secondaryMessage
   }
 
   let clientMsg = preferred.clientMsg
   if (secondary.clientMsg) {
-    if (clientMsg) noteList.push(secondary.clientMsg)
+    if (clientMsg) addNote(secondary.clientMsg)
     else clientMsg = secondary.clientMsg
   }
 
-  noteList.push(...secondary.notes)
+  secondary.notes.forEach(addNote)
+
+  let cause: FErrCause = preferred.cause
+  if (!isNil(secondary.cause)) {
+    if (isNil(cause)) cause = secondary.cause
+    else {
+      const secondaryCauseMessage = messageFromCause(secondary.cause)
+      if (secondaryCauseMessage) addNote(secondaryCauseMessage)
+    }
+  }
 
   return new FErr({
     op,
@@ -134,7 +146,7 @@ const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
     clientMsg,
     notes: noteList,
     context: mergeContext(preferred.context, secondary.context),
-    cause: !isNil(preferred.cause) ? preferred.cause : secondary.cause,
+    cause,
     stackLines: preferred.stackLines
   })
 }
@@ -183,6 +195,15 @@ export class FErr extends Error {
   // - If message is non-default and cause has a different message/string, append it to notes.
   // - Raw string cause is intentionally supported and treated as a valid cause message.
   static from(input: unknown, overrides: Partial<FErrOptions> = {}): FErr {
+    if (input instanceof FErr) {
+      return new FErr({
+        ...input.toOptions(),
+        ...overrides,
+        notes: !isNil(overrides.notes) ? overrides.notes : input.notes,
+        stackLines: toStackLines(overrides.stackLines).length > 0 ? overrides.stackLines : input.stackLines
+      })
+    }
+
     const base = normalizeOptionsFromUnknown(input)
     const merged: FErrOptions = {
       ...base,
