@@ -172,6 +172,19 @@ describe('FErr class-first API', () => {
     expect(ferr.notes).to.deep.equal(['n1', 'n2'])
   })
 
+  it('tracks operation history and renders it as Operations', () => {
+    const ferr = new FErr({ op: 'repo.load', message: 'x' })
+      .withOp('service.load')
+      .withOp('api.handle')
+
+    expect(ferr.opTrace).to.deep.equal(['repo.load', 'service.load', 'api.handle'])
+    const out = ferr.toDetailedString()
+    expect(out).to.contain('Operations:')
+    expect(out).to.contain('repo.load')
+    expect(out).to.contain('service.load')
+    expect(out).to.contain('api.handle')
+  })
+
   it('merges with append semantics (existing wins)', () => {
     const existing = new FErr({
       op: 'existing-op',
@@ -198,6 +211,7 @@ describe('FErr class-first API', () => {
     expect(merged.clientMsg).to.equal('existing-client')
     expect(merged.notes).to.include.members(['existing-note', 'incoming-note'])
     expect(merged.context).to.deep.equal({ shared: 'existing', a: 1, b: 2 })
+    expect(merged.opTrace).to.deep.equal(['existing-op', 'incoming-op'])
   })
 
   it('handles merge defaults with notes-only incoming payloads', () => {
@@ -231,6 +245,7 @@ describe('FErr class-first API', () => {
     expect(merged.code).to.equal('INCOMING')
     expect(merged.message).to.equal('incoming-msg')
     expect(merged.context).to.deep.equal({ shared: 'incoming', b: 2, a: 1 })
+    expect(merged.opTrace).to.deep.equal(['incoming-op', 'existing-op'])
   })
 
   it('covers merge branch behavior for conflicts and cause precedence', () => {
@@ -264,12 +279,12 @@ describe('FErr class-first API', () => {
     expect(appended.notes).to.include.members([
       'e-note',
       'Code: I_CODE',
-      'Op: i-op',
       'i-msg',
       'i-client',
       'i-note',
       'incoming-cause'
     ])
+    expect(appended.opTrace).to.deep.equal(['e-op', 'i-op'])
 
     const updated = existing.mergeUpdate(incoming)
     expect(updated.op).to.equal('i-op')
@@ -280,12 +295,12 @@ describe('FErr class-first API', () => {
     expect(updated.notes).to.include.members([
       'i-note',
       'Code: E_CODE',
-      'Op: e-op',
       'e-msg',
       'e-client',
       'e-note',
       'existing-cause'
     ])
+    expect(updated.opTrace).to.deep.equal(['i-op', 'e-op'])
   })
 
   it('does not duplicate repeated incoming note/message/cause values during merge', () => {

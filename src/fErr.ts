@@ -27,6 +27,7 @@ export type FErrCause = Error | string | Record<string, unknown> | null
 export interface FErrOptions {
   message?: string
   op?: string
+  opTrace?: string[]
   code?: string
   clientMsg?: string
   notes?: FErrNotesInput
@@ -60,6 +61,25 @@ const toStackLines = (value: unknown): string[] => {
   return []
 }
 
+const toOpTrace = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter(isString) : []
+
+const appendUnique = (list: string[], maybeValue: unknown): string[] => {
+  if (!isString(maybeValue) || maybeValue.length === 0) return list
+  return list.includes(maybeValue) ? list : [...list, maybeValue]
+}
+
+const mergeOperations = (left: string[], right: string[]): string[] => {
+  const out: string[] = []
+  left.forEach(op => {
+    if (!out.includes(op)) out.push(op)
+  })
+  right.forEach(op => {
+    if (!out.includes(op)) out.push(op)
+  })
+  return out
+}
+
 const normalizeCause = (value: unknown): FErrCause => {
   if (isNil(value)) return null
   if (value instanceof Error || isString(value)) return value
@@ -91,6 +111,7 @@ const normalizeOptionsFromUnknown = (input: unknown): FErrOptions => {
   const out: FErrOptions = {}
   if (isString(input.message)) out.message = input.message
   if (isString(input.op)) out.op = input.op
+  if (Array.isArray(input.opTrace)) out.opTrace = toOpTrace(input.opTrace)
   if (isString(input.code)) out.code = input.code
   if (isString(input.clientMsg)) out.clientMsg = input.clientMsg
   if (!isNil(input.context)) out.context = input.context
@@ -130,8 +151,7 @@ const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
 
   let op = preferred.op
   if (secondary.op) {
-    if (op) addNote(`Op: ${secondary.op}`)
-    else op = secondary.op
+    if (!op) op = secondary.op
   }
 
   let message = preferred.message
@@ -160,6 +180,7 @@ const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
 
   return new FErr({
     op,
+    opTrace: mergeOperations(preferred.opTrace, secondary.opTrace),
     code,
     message,
     clientMsg,
@@ -172,6 +193,7 @@ const mergeAppend = (preferred: FErr, secondary: FErr): FErr => {
 
 export class FErr extends Error {
   readonly op: string
+  readonly opTrace: string[]
   readonly code: string
   readonly clientMsg: string
   readonly notes: string[]
@@ -198,6 +220,7 @@ export class FErr extends Error {
     })
 
     this.op = isString(options.op) ? options.op : ''
+    this.opTrace = appendUnique(toOpTrace(options.opTrace), this.op)
     this.code = isString(options.code) ? options.code : ''
     this.clientMsg = isString(options.clientMsg) ? options.clientMsg : ''
     this.notes = toNoteList(options.notes)
@@ -298,6 +321,7 @@ export class FErr extends Error {
   toOptions(): FErrOptions {
     return {
       op: this.op,
+      opTrace: [...this.opTrace],
       code: this.code,
       message: this.message,
       clientMsg: this.clientMsg,
@@ -315,6 +339,7 @@ export class FErr extends Error {
     return {
       name: this.name,
       op: this.op,
+      opTrace: [...this.opTrace],
       code: this.code,
       message: this.message,
       clientMsg: this.clientMsg,
@@ -344,7 +369,10 @@ export class FErr extends Error {
 
   /** Return a copy with updated `op`. */
   withOp(op: string): FErr {
-    return this.with({ op })
+    return this.with({
+      op,
+      opTrace: appendUnique(this.opTrace, op)
+    })
   }
 
   /** Return a copy with updated `code`. */
@@ -391,6 +419,11 @@ export class FErr extends Error {
   toDetailedString(): string {
     const lines = ['\nERROR encountered !!']
     lines.push(tab(`Msg: ${this.toMessageString()}`) as string)
+
+    if (this.opTrace.length > 0) {
+      lines.push('Operations:')
+      this.opTrace.forEach(op => lines.push(tab(op) as string))
+    }
 
     if (this.clientMsg) lines.push(tab(`Client msg: ${this.clientMsg}`) as string)
     if (this.code) lines.push(tab(`Code: ${this.code}`) as string)
