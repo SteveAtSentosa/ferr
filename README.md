@@ -1,6 +1,7 @@
 # ferr
 
 `ferr` is a pragmatic error library for TypeScript/Node.
+`fErr` stands for "Fancy Error".
 
 It keeps the native `Error` model (`instanceof Error` still works), while making failures easier to compose, enrich, and log in real systems.
 
@@ -41,29 +42,44 @@ console.log(err.toMessageString())
 console.log(err.toDetailedString())
 ```
 
-## Main use cases
+## Examples
 
 1. Normalize unknown caught errors
 
 ```ts
+import { FErr } from 'ferr'
+
 try {
   await doWork()
 } catch (e) {
-  throw FErr.from(e).withOp('doWork').withCode('WORK_FAILED')
+  throw FErr.from(e)
+    .withOp('service.doWork')
+    .withCode('WORK_FAILED')
+    .withContext({ jobId: 'j_123' })
 }
 ```
 
 2. Add context without mutation
 
 ```ts
-const enriched = ferr.withContext({ requestId, tenantId }).withNotes('retry path used')
+import { FErr } from 'ferr'
+
+const base = new FErr({ op: 'auth.login', message: 'Login failed' })
+const enriched = base
+  .withContext({ requestId: 'r_123', tenantId: 't_9' })
+  .withNotes('retry path used')
+
+// base is unchanged; enriched is a new instance
 ```
 
 3. Merge failures across boundaries
 
 ```ts
+import { FErr } from 'ferr'
+
 const appErr = new FErr({ op: 'createOrder', message: 'Order failed' })
 const merged = appErr.mergeAppend(externalErr)
+console.log(merged.toDetailedString())
 ```
 
 4. Throw helpers for guard clauses
@@ -88,6 +104,38 @@ try {
 }
 
 throwIfUndefined(config, 'boot', 'Missing config')
+```
+
+5. Wrapper-style throw/rethrow (recommended for service layers)
+
+```ts
+import { rethrowFerr, throwFerr } from 'ferr'
+
+const authorize = (userId: string) => {
+  if (!userId) {
+    throwFerr({
+      with: {
+        op: 'auth.authorize',
+        code: 'AUTH_MISSING_USER',
+        message: 'Missing user id'
+      }
+    })
+  }
+}
+
+const handleRequest = async () => {
+  try {
+    await authorize('u_123')
+  } catch (caught) {
+    rethrowFerr(caught, {
+      with: {
+        op: 'api.handleRequest',
+        code: 'REQUEST_FAILED',
+        message: 'Request failed'
+      }
+    })
+  }
+}
 ```
 
 ## API overview
@@ -138,4 +186,10 @@ Plain `Error` is good for simple throw/catch, but it does not define how to:
 pnpm lint
 pnpm sanity
 pnpm run viz
+```
+
+## Release (Local)
+
+```bash
+pnpm run release
 ```

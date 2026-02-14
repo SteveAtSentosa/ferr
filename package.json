@@ -1,6 +1,6 @@
 {
   "name": "ferr",
-  "version": "2.1.14",
+  "version": "3.0.0",
   "description": "Expressive error handling with a functional focus",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -25,11 +25,16 @@
   "author": "Steven Saunders <steve.saunders@technicity.io>",
   "license": "MIT",
   "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "packageManager": "pnpm@9.15.4",
   "dependencies": {
     "remeda": "^2.32.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^25.2.3",
     "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.55.0",
@@ -50,6 +55,7 @@
     "viz": "tsx vizualize/vizualize.errorMessages.ts",
     "clean": "rimraf ./dist",
     "clean:all": "pnpm run clean && rimraf ./node_modules pnpm-lock.yaml",
-    "sanity": "pnpm build && pnpm build:tests && pnpm test"
+    "build-and-check": "pnpm build && pnpm build:tests && pnpm test",
+    "release": "bash ./release-guided.sh"
   }
 }
