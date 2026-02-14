@@ -5,6 +5,7 @@ steps=(
   "pnpm exec changeset"
   "pnpm exec changeset version"
   "pnpm run build-and-check"
+  "git add -A && git commit -m 'version bump'"
   "pnpm exec changeset publish"
   "git push --follow-tags"
 )
