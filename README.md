@@ -111,6 +111,9 @@ throwIfUndefined(config, 'boot', 'Missing config')
 - `throwIfUndefined`
 - custom factories: `createThrowErr`, `createThrowErrIf`, `createThrowIfUndefined`
 
+Note: root package exports are intentionally limited to the `FErr` API and throw/rethrow helpers.
+Internal utility helpers are implementation details and are not part of the stable public API contract.
+
 ## Why this over plain `Error`?
 
 Plain `Error` is good for simple throw/catch, but it does not define how to:
