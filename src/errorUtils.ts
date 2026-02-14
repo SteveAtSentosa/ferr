@@ -1,4 +1,4 @@
-import { DEFAULT_FERR_MESSAGE, FErr, type FErrCause, type FErrOptions } from './fErr'
+import { DEFAULT_FERR_MESSAGE, FErr, type FErrCause, type FErrOptions, type MsgInput } from './fErr'
 import { toJson } from './ferrUtils'
 
 /**
@@ -8,7 +8,7 @@ import { toJson } from './ferrUtils'
 export interface ThrowOptions {
   op?: string
   code?: string
-  clientMsg?: string
+  clientMsg?: MsgInput
   context?: unknown
   cause?: FErrCause | unknown
   notes?: string | string[]
@@ -46,14 +46,15 @@ const mergeNotes = (a: unknown, b: unknown): string[] => {
   return [...new Set(merged)]
 }
 
-const isThrowFerrRequest = (input: unknown): input is ThrowFerrRequest =>
-  !!input &&
-  typeof input === 'object' &&
-  'with' in input &&
-  typeof (input as { with?: { op?: unknown, message?: unknown } }).with?.op === 'string' &&
-  typeof (input as { with?: { op?: unknown, message?: unknown } }).with?.message === 'string'
+const isThrowFerrRequest = (input: unknown): input is ThrowFerrRequest => {
+  if (!input || typeof input !== 'object' || !('with' in input)) return false
+  const w = (input as { with?: { op?: unknown, message?: unknown } }).with
+  if (typeof w?.op !== 'string') return false
+  const msgType = typeof w?.message
+  return msgType === 'string' || msgType === 'function'
+}
 
-const toFerrOptions = (message: string, options: ThrowOptions = {}): FErrOptions => ({
+const toFerrOptions = (message: MsgInput, options: ThrowOptions = {}): FErrOptions => ({
   message,
   op: options.op,
   code: options.code,
@@ -67,8 +68,9 @@ const toFerrOptions = (message: string, options: ThrowOptions = {}): FErrOptions
  * Build a readable operation-scoped message.
  * Useful for non-`FErr` custom throw factories.
  */
-export const formatMsg = (op: string, message: string, context?: unknown): string => {
-  const lines = [`${op} failed: ${message}`]
+export const formatMsg = (op: string, message: MsgInput, context?: unknown): string => {
+  const resolved = typeof message === 'function' ? message(context) : message
+  const lines = [`${op} failed: ${resolved}`]
   if (context !== undefined) lines.push(`Context: ${toJson(context)}`)
   return lines.join('\n')
 }
@@ -101,7 +103,7 @@ export const throwFerrIf = (condition: boolean, input: unknown, overrides?: Part
  */
 export const throwErr = (
   op: string,
-  message: string,
+  message: MsgInput,
   options: ThrowOptions = {}
 ): never => {
   return throwFerr(toFerrOptions(message, { ...options, op }))
@@ -113,7 +115,7 @@ export const throwErr = (
 export const throwErrIf = (
   condition: boolean,
   op: string,
-  message: string,
+  message: MsgInput,
   options: ThrowOptions = {}
 ): void => {
   if (condition) throwErr(op, message, options)
@@ -157,7 +159,7 @@ export const rethrowFerr = (caught: unknown, options: RethrowFerrRequest): never
 export function throwIfUndefined<T>(
   value: T,
   op: string,
-  message = DEFAULT_FERR_MESSAGE,
+  message: MsgInput = DEFAULT_FERR_MESSAGE,
   options: ThrowOptions = {}
 ): asserts value is Exclude<T, undefined> {
   if (value === undefined) throwErr(op, message, options)
@@ -170,7 +172,7 @@ export const createThrowErr = <E extends Error>(
   ErrorClass: new (message: string) => E
 ) => (
     op: string,
-    message: string,
+    message: MsgInput,
     options: ThrowOptions = {}
   ): never => {
     throw new ErrorClass(formatMsg(op, message, options.context))
@@ -186,7 +188,7 @@ export const createThrowErrIf = <E extends Error>(
   return (
     condition: boolean,
     op: string,
-    message: string,
+    message: MsgInput,
     options: ThrowOptions = {}
   ): void => {
     if (condition) throwFn(op, message, options)
@@ -203,7 +205,7 @@ export const createThrowIfUndefined = <E extends Error>(
   return <T>(
     value: T,
     op: string,
-    message = DEFAULT_FERR_MESSAGE,
+    message: MsgInput = DEFAULT_FERR_MESSAGE,
     options: ThrowOptions = {}
   ): asserts value is Exclude<T, undefined> => {
     if (value === undefined) throwFn(op, message, options)

@@ -10,6 +10,14 @@ export const DEFAULT_FERR_MESSAGE = 'unknown error'
  */
 export type FErrNotesInput = string | string[]
 /**
+ * Message input: a static string or a function that receives
+ * the error's {@link FErrOptions.context context} and returns
+ * the resolved message string.
+ *
+ * Functions are resolved eagerly at construction time.
+ */
+export type MsgInput = string | ((context: unknown) => string)
+/**
  * Canonical cause payload supported by {@link FErr}.
  * - `Error`: structured runtime errors
  * - `string`: lightweight cause message
@@ -25,11 +33,11 @@ export type FErrCause = Error | string | Record<string, unknown> | null
  * `stackLines` is primarily for deterministic tests or custom formatting flows.
  */
 export interface FErrOptions {
-  message?: string
+  message?: MsgInput
   op?: string
   opTrace?: string[]
   code?: string
-  clientMsg?: string
+  clientMsg?: MsgInput
   notes?: FErrNotesInput
   context?: unknown
   cause?: FErrCause | unknown
@@ -87,6 +95,11 @@ const normalizeCause = (value: unknown): FErrCause => {
   return { value }
 }
 
+const resolveMsg = (msg: MsgInput | undefined, context: unknown): string | undefined => {
+  if (typeof msg === 'function') return msg(context)
+  return msg
+}
+
 const nonDefaultMessage = (message: string): boolean => message !== DEFAULT_FERR_MESSAGE
 
 const messageFromCause = (input: FErrCause): string | null => {
@@ -109,11 +122,11 @@ const normalizeOptionsFromUnknown = (input: unknown): FErrOptions => {
   if (!isRecord(input)) return {}
 
   const out: FErrOptions = {}
-  if (isString(input.message)) out.message = input.message
+  if (isString(input.message) || typeof input.message === 'function') out.message = input.message as MsgInput
   if (isString(input.op)) out.op = input.op
   if (Array.isArray(input.opTrace)) out.opTrace = toOpTrace(input.opTrace)
   if (isString(input.code)) out.code = input.code
-  if (isString(input.clientMsg)) out.clientMsg = input.clientMsg
+  if (isString(input.clientMsg) || typeof input.clientMsg === 'function') out.clientMsg = input.clientMsg as MsgInput
   if (!isNil(input.context)) out.context = input.context
 
   if (Array.isArray(input.notes) || isString(input.notes))
@@ -208,7 +221,9 @@ export class FErr extends Error {
    * only the fields they have without brittle argument ordering.
    */
   constructor(options: FErrOptions = {}) {
-    const message = isNonEmptyString(options.message) ? options.message : DEFAULT_FERR_MESSAGE
+    const context = isNil(options.context) ? null : options.context
+    const resolvedMessage = resolveMsg(options.message, context)
+    const message = isNonEmptyString(resolvedMessage) ? resolvedMessage : DEFAULT_FERR_MESSAGE
     super(message, isNil(options.cause) ? undefined : { cause: options.cause })
     this.name = 'FErr'
 
@@ -222,9 +237,10 @@ export class FErr extends Error {
     this.op = isString(options.op) ? options.op : ''
     this.opTrace = appendUnique(toOpTrace(options.opTrace), this.op)
     this.code = isString(options.code) ? options.code : ''
-    this.clientMsg = isString(options.clientMsg) ? options.clientMsg : ''
+    const resolvedClientMsg = resolveMsg(options.clientMsg, context)
+    this.clientMsg = isString(resolvedClientMsg) ? resolvedClientMsg : ''
     this.notes = toNoteList(options.notes)
-    this.context = isNil(options.context) ? null : options.context
+    this.context = context
     this.cause = normalizeCause(options.cause)
 
     this.stackLines =
@@ -363,7 +379,7 @@ export class FErr extends Error {
   }
 
   /** Return a copy with updated `message`. */
-  withMessage(message: string): FErr {
+  withMessage(message: MsgInput): FErr {
     return this.with({ message })
   }
 
@@ -381,7 +397,7 @@ export class FErr extends Error {
   }
 
   /** Return a copy with updated `clientMsg`. */
-  withClientMsg(clientMsg: string): FErr {
+  withClientMsg(clientMsg: MsgInput): FErr {
     return this.with({ clientMsg })
   }
 

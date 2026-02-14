@@ -6,7 +6,8 @@ export {
   isNotFerr,
   type FErrCause,
   type FErrNotesInput,
-  type FErrOptions
+  type FErrOptions,
+  type MsgInput
 } from './fErr'
 
 export {

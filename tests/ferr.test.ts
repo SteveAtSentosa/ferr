@@ -516,6 +516,136 @@ describe('FErr class-first API', () => {
   })
 })
 
+describe('MsgInput — function messages resolved from context', () => {
+
+  it('resolves function message in constructor using context', () => {
+    const ferr = new FErr({
+      message: (ctx) => `Record ${(ctx as { id: string }).id} not found`,
+      context: { id: 'food:oatmeal' },
+    })
+    expect(ferr.message).to.equal('Record food:oatmeal not found')
+  })
+
+  it('resolves function clientMsg in constructor using context', () => {
+    const ferr = new FErr({
+      message: 'internal error',
+      clientMsg: (ctx) => `Item ${(ctx as { id: string }).id} missing`,
+      context: { id: 'dish:tacos' },
+    })
+    expect(ferr.clientMsg).to.equal('Item dish:tacos missing')
+  })
+
+  it('resolves both message and clientMsg as functions', () => {
+    const msgFn = (ctx: unknown) => `Not found: ${(ctx as { table: string }).table}`
+    const ferr = new FErr({
+      message: msgFn,
+      clientMsg: msgFn,
+      context: { table: 'food' },
+    })
+    expect(ferr.message).to.equal('Not found: food')
+    expect(ferr.clientMsg).to.equal('Not found: food')
+  })
+
+  it('function message receives null when context is omitted', () => {
+    const ferr = new FErr({
+      message: (ctx) => `ctx is ${ctx}`,
+    })
+    expect(ferr.message).to.equal('ctx is null')
+  })
+
+  it('function returning empty string yields DEFAULT_FERR_MESSAGE', () => {
+    const ferr = new FErr({
+      message: () => '',
+      context: { id: 1 },
+    })
+    expect(ferr.message).to.equal(DEFAULT_FERR_MESSAGE)
+  })
+
+  it('withMessage resolves function against existing context', () => {
+    const base = new FErr({ message: 'original', context: { id: 42 } })
+    const updated = base.withMessage((ctx) => `updated: ${(ctx as { id: number }).id}`)
+    expect(updated.message).to.equal('updated: 42')
+    expect(base.message).to.equal('original')
+  })
+
+  it('withClientMsg resolves function against existing context', () => {
+    const base = new FErr({ message: 'x', context: { name: 'oatmeal' } })
+    const updated = base.withClientMsg((ctx) => `${(ctx as { name: string }).name} not found`)
+    expect(updated.clientMsg).to.equal('oatmeal not found')
+  })
+
+  it('throwErr accepts function message resolved via context', () => {
+    const thrown = retThrownErr(() =>
+      throwErr('db.lookup', (ctx) => `Record ${(ctx as { id: string }).id} missing`, {
+        context: { id: 'food:banana' },
+      })
+    ) as FErr
+    expect(thrown.message).to.equal('Record food:banana missing')
+    expect(thrown.op).to.equal('db.lookup')
+  })
+
+  it('throwErrIf accepts function message', () => {
+    const thrown = retThrownErr(() =>
+      throwErrIf(true, 'guard', (ctx) => `${(ctx as { table: string }).table} not found`, {
+        context: { table: 'category' },
+      })
+    ) as FErr
+    expect(thrown.message).to.equal('category not found')
+
+    expect(retThrownErr(() =>
+      throwErrIf(false, 'guard', (ctx) => `${(ctx as { table: string }).table} not found`, {
+        context: { table: 'category' },
+      })
+    )).to.equal(null)
+  })
+
+  it('throwFerr wrapper-style accepts function message', () => {
+    const thrown = retThrownErr(() =>
+      throwFerr({
+        with: {
+          op: 'api.create',
+          message: (ctx: unknown) => `Item ${(ctx as { id: string }).id} exists`,
+          context: { id: 'food:rice' },
+        },
+      })
+    ) as FErr
+    expect(thrown.message).to.equal('Item food:rice exists')
+    expect(thrown.op).to.equal('api.create')
+  })
+
+  it('FErr.from preserves function message from plain object', () => {
+    const ferr = FErr.from({
+      message: (ctx: unknown) => `resolved: ${(ctx as { v: number }).v}`,
+      context: { v: 99 },
+    })
+    expect(ferr.message).to.equal('resolved: 99')
+  })
+
+  it('formatMsg resolves function message', () => {
+    const result = formatMsg('op', (ctx) => `Record ${(ctx as { id: string }).id} gone`, { id: 'x:1' })
+    expect(result).to.contain('Record x:1 gone')
+    expect(result).to.contain('op failed:')
+  })
+
+  it('throwIfUndefined accepts function message', () => {
+    const thrown = retThrownErr(() =>
+      throwIfUndefined(undefined, 'cfg', (ctx) => `missing ${(ctx as { key: string }).key}`, {
+        context: { key: 'DB_URL' },
+      })
+    ) as FErr
+    expect(thrown.message).to.equal('missing DB_URL')
+  })
+
+  it('string messages still work everywhere (backwards compat)', () => {
+    const ferr = new FErr({ message: 'plain string', clientMsg: 'client string', context: { x: 1 } })
+    expect(ferr.message).to.equal('plain string')
+    expect(ferr.clientMsg).to.equal('client string')
+
+    const thrown = retThrownErr(() => throwErr('op', 'static msg')) as FErr
+    expect(thrown.message).to.equal('static msg')
+  })
+})
+
 describe('ferrUtils quick coverage checks', () => {
   it('handles currying and array/object helpers', async () => {
     const join3 = curryLast((a: string, b: string, c: string) => `${a}-${b}-${c}`)
