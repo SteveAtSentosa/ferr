@@ -1,6 +1,6 @@
 {
   "name": "ferr",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Expressive error handling with a functional focus",
   "type": "module",
   "main": "./dist/index.cjs",
