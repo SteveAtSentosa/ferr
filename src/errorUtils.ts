@@ -317,35 +317,34 @@ export const createThrowIfUndefined = <E extends Error>(
 // Curried variants designed for use in `.catch()` and pipeline chains.
 
 /**
- * Curried `rethrowFerr` for `.catch()` and pipeline chains.
+ * Curried rethrow for `.catch()` and pipeline chains.
  *
- * Accepts two calling styles:
- * - **Short form:** `pRethrowFerr({ op, message, code, clientMsg, context, notes, cause })`
- * - **Full form:** `pRethrowFerr({ with: { op, ... }, notes, mode })`
+ * Pre-applies the `with` fields from {@link rethrowFerr}, returning a
+ * function that accepts the caught error. Uses update merge semantics
+ * (incoming fields win).
  *
- * Returns `(caught: unknown) => never` — plug directly into `.catch()`.
- *
- * @param options - Either `Partial<FErrOptions>` (short) or `RethrowFerrRequest` (full)
+ * @param options - FErr fields to merge into the caught error:
+ *   - `op` — Operation name (e.g. `'api.foods.list'`)
+ *   - `message` — Error message (string or `(context) => string`)
+ *   - `code` — Machine-readable code (e.g. `'REQUEST_FAILED'`)
+ *   - `clientMsg` — Safe message for end-user display
+ *   - `context` — Structured debugging data (e.g. `{ id, table }`)
+ *   - `notes` — Breadcrumb annotations
+ *   - `cause` — Original error (`Error`, `string`, or `Record`)
+ * @returns `(caught: unknown) => never` — plug directly into `.catch()`
  *
  * @example
- * // Short form — just the fields to merge
  * getDb().getAllFoods()
  *   .then(sendOk(res))
- *   .catch(pRethrowFerr({
+ *   .catch(pRethrowFerrWith({
  *     op: 'api.foods.list',
  *     code: 'REQUEST_FAILED',
  *     message: 'Failed to list foods',
  *   }))
- *
- * @example
- * // Full form — with mode and top-level notes
- * fetchExternal()
- *   .catch(pRethrowFerr({
- *     with: { op: 'api.proxy', code: 'UPSTREAM_ERROR' },
- *     notes: 'external service timeout',
- *     mode: 'append',
- *   }))
  */
-export const pRethrowFerr = (options: RethrowFerrRequest | Partial<FErrOptions>) =>
+export const pRethrowFerrWith = (options: Partial<FErrOptions>) =>
   (caught: unknown): never =>
-    rethrowFerr(caught, 'with' in options ? options as RethrowFerrRequest : { with: options })
+    rethrowFerr(caught, { with: options })
+
+/** @deprecated Use {@link pRethrowFerrWith} instead. */
+export const pRethrowFerr = pRethrowFerrWith

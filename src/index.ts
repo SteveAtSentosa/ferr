@@ -16,6 +16,7 @@ export {
   createThrowIfUndefined,
   formatMsg,
   pRethrowFerr,
+  pRethrowFerrWith,
   rethrowAppend,
   rethrowFerr,
   rethrowUpdate,
