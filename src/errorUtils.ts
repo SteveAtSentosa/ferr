@@ -211,3 +211,18 @@ export const createThrowIfUndefined = <E extends Error>(
     if (value === undefined) throwFn(op, message, options)
   }
 }
+
+// ─── Pipe-friendly versions ─────────────────────────────────────────
+// Curried variants designed for use in `.catch()` and pipeline chains.
+
+/**
+ * Curried `rethrowFerr` for `.catch()` chains.
+ *
+ * @example
+ * getDb().getAllFoods()
+ *   .then(sendOk(res))
+ *   .catch(pRethrowFerr({ op: 'api.foods.list', code: 'REQUEST_FAILED', message: 'Failed to list foods' }))
+ */
+export const pRethrowFerr = (options: RethrowFerrRequest | Partial<FErrOptions>) =>
+  (caught: unknown): never =>
+    rethrowFerr(caught, 'with' in options ? options as RethrowFerrRequest : { with: options })
