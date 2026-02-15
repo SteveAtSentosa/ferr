@@ -1,5 +1,11 @@
 # ferr
 
+## 3.0.4
+
+### Patch Changes
+
+- add pipe freindly versoin of rethrowFerr
+
 ## 3.0.2
 
 ### Patch Changes
