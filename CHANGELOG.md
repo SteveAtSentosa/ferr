@@ -1,5 +1,11 @@
 # ferr
 
+## 3.0.5
+
+### Patch Changes
+
+- better docs
+
 ## 3.0.4
 
 ### Patch Changes
