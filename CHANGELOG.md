@@ -1,5 +1,11 @@
 # ferr
 
+## 3.0.6
+
+### Patch Changes
+
+- minor
+
 ## 3.0.5
 
 ### Patch Changes
