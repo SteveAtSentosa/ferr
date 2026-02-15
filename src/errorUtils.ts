@@ -4,6 +4,13 @@ import { toJson } from './ferrUtils'
 /**
  * Shared options for throw helper APIs.
  * Mirrors a focused subset of {@link FErrOptions} but keeps callsites ergonomic.
+ *
+ * @property op - Operation name (e.g. `'db.food.add'`, `'api.foods.create'`)
+ * @property code - Machine-readable error code (e.g. `'RECORD_NOT_FOUND'`, `'VALIDATION_ERROR'`)
+ * @property clientMsg - Safe message for end-user display (string or `(context) => string`)
+ * @property context - Structured data for debugging (e.g. `{ id, table }`)
+ * @property cause - Original error that triggered this one (`Error`, `string`, or `Record`)
+ * @property notes - Breadcrumb annotations (`string` or `string[]`); accumulated across rethrows
  */
 export interface ThrowOptions {
   op?: string
@@ -26,6 +33,21 @@ export interface ThrowFerrRequest {
 /**
  * Wrapper-style payload for `rethrowFerr(err, { with: ... })`.
  * Defaults to `update` mode.
+ *
+ * @property with - Fields to merge into the caught error:
+ *   - `op` — Operation name (e.g. `'api.foods.list'`)
+ *   - `message` — Error message (string or `(context) => string`)
+ *   - `code` — Machine-readable code (e.g. `'REQUEST_FAILED'`)
+ *   - `clientMsg` — Safe message for end-user display
+ *   - `context` — Structured debugging data (e.g. `{ id, table }`)
+ *   - `notes` — Breadcrumb annotations
+ *   - `cause` — Original error (`Error`, `string`, or `Record`)
+ *   - `opTrace` — Operation call chain (auto-accumulated)
+ *   - `stackLines` — Override stack trace lines
+ * @property notes - Top-level notes (merged with `with.notes`)
+ * @property mode - Merge strategy:
+ *   - `'update'` (default) — incoming fields win conflicts
+ *   - `'append'` — existing fields win; conflicts preserved in notes
  */
 export interface RethrowFerrRequest {
   with?: Partial<FErrOptions>
@@ -77,6 +99,16 @@ export const formatMsg = (op: string, message: MsgInput, context?: unknown): str
 
 /**
  * Throw an `FErr` from unknown input.
+ *
+ * Accepts two calling styles:
+ * - **Direct:** `throwFerr(errorOrString, { op, code, ... })`
+ * - **Wrapper:** `throwFerr({ with: { op, message, code, clientMsg, context, notes, cause } })`
+ *
+ * Input is coerced via `FErr.from()` — supports `Error`, `string`, `FErr`,
+ * plain objects with ferr-like keys, or anything else (safe defaults).
+ *
+ * @param input - The error source (Error, string, FErr, ThrowFerrRequest, or unknown)
+ * @param overrides - Optional FErrOptions fields to merge over the coerced error
  */
 export const throwFerr = (input: unknown, overrides?: Partial<FErrOptions>): never => {
   if (isThrowFerrRequest(input)) {
@@ -92,7 +124,11 @@ export const throwFerr = (input: unknown, overrides?: Partial<FErrOptions>): nev
 }
 
 /**
- * Conditional variant of {@link throwFerr}.
+ * Conditional variant of {@link throwFerr} — only throws when `condition` is `true`.
+ *
+ * @param condition - Throws when truthy
+ * @param input - The error source (Error, string, FErr, ThrowFerrRequest, or unknown)
+ * @param overrides - Optional FErrOptions fields to merge over the coerced error
  */
 export const throwFerrIf = (condition: boolean, input: unknown, overrides?: Partial<FErrOptions>): void => {
   if (condition) throwFerr(input, overrides)
@@ -100,6 +136,18 @@ export const throwFerrIf = (condition: boolean, input: unknown, overrides?: Part
 
 /**
  * Throw an `FErr` from operation + message inputs.
+ *
+ * Simpler ergonomic API when you know the op and message at the callsite.
+ *
+ * @param op - Operation name (e.g. `'db.food.add'`)
+ * @param message - Error message (string or `(context) => string`)
+ * @param options - Additional fields: `{ code, clientMsg, context, cause, notes }`
+ *
+ * @example
+ * throwErr('db.food.add', 'Duplicate name', {
+ *   code: 'DUPLICATE',
+ *   context: { name: 'Brown Rice' },
+ * })
  */
 export const throwErr = (
   op: string,
@@ -110,7 +158,19 @@ export const throwErr = (
 }
 
 /**
- * Conditional variant of {@link throwErr}.
+ * Conditional variant of {@link throwErr} — only throws when `condition` is `true`.
+ *
+ * @param condition - Throws when truthy
+ * @param op - Operation name (e.g. `'db.food.add'`)
+ * @param message - Error message (string or `(context) => string`)
+ * @param options - Additional fields: `{ code, clientMsg, context, cause, notes }`
+ *
+ * @example
+ * throwErrIf(!exists, 'db.ornishServing.add', 'Food not found', {
+ *   code: 'RECORD_NOT_FOUND',
+ *   clientMsg: 'Food not found',
+ *   context: { id },
+ * })
  */
 export const throwErrIf = (
   condition: boolean,
@@ -123,6 +183,12 @@ export const throwErrIf = (
 
 /**
  * Re-throw by append-merging incoming error data into an existing error.
+ *
+ * **Append semantics:** existing error fields win conflicts.
+ * Conflicting incoming fields are preserved in notes.
+ *
+ * @param existing - The caught error (coerced via `FErr.from()`)
+ * @param incoming - New context to merge in (Error, string, FErrOptions, or unknown)
  */
 export const rethrowAppend = (existing: unknown, incoming: unknown): never => {
   throw FErr.from(existing).mergeAppend(incoming)
@@ -130,16 +196,37 @@ export const rethrowAppend = (existing: unknown, incoming: unknown): never => {
 
 /**
  * Re-throw by update-merging incoming error data over an existing error.
+ *
+ * **Update semantics:** incoming fields win conflicts.
+ *
+ * @param existing - The caught error (coerced via `FErr.from()`)
+ * @param incoming - New context to merge over (Error, string, FErrOptions, or unknown)
  */
 export const rethrowUpdate = (existing: unknown, incoming: unknown): never => {
   throw FErr.from(existing).mergeUpdate(incoming)
 }
 
 /**
- * Wrapper-style rethrow helper.
+ * Wrapper-style rethrow helper — the primary catch-block API.
  *
- * Defaults to update semantics:
- * `rethrowFerr(err, { with: { op, code, ... } })`
+ * Coerces the caught error via `FErr.from()`, then merges the `with` fields.
+ * Defaults to **update** semantics (incoming fields win).
+ *
+ * @param caught - The caught error (any type — coerced to FErr)
+ * @param options - Rethrow configuration:
+ *   - `with` — Fields to merge: `{ op, message, code, clientMsg, context, notes, cause, opTrace }`
+ *   - `notes` — Top-level breadcrumb notes (merged with `with.notes`)
+ *   - `mode` — `'update'` (default, incoming wins) or `'append'` (existing wins)
+ *
+ * @example
+ * try {
+ *   await doWork()
+ * } catch (e) {
+ *   rethrowFerr(e, {
+ *     with: { op: 'api.foods.create', code: 'CREATE_FAILED', message: 'Failed to create food' },
+ *     notes: 'caught in handler',
+ *   })
+ * }
  */
 export const rethrowFerr = (caught: unknown, options: RethrowFerrRequest): never => {
   const patch: Partial<FErrOptions> = {
@@ -154,7 +241,21 @@ export const rethrowFerr = (caught: unknown, options: RethrowFerrRequest): never
 }
 
 /**
- * Assert that a value is defined; throw `FErr` if not.
+ * Assert that a value is defined; throw `FErr` if `undefined`.
+ *
+ * Narrows the TypeScript type to exclude `undefined` on success.
+ *
+ * @param value - The value to check
+ * @param op - Operation name (e.g. `'db.food.getById'`)
+ * @param message - Error message (string or `(context) => string`)
+ * @param options - Additional fields: `{ code, clientMsg, context, cause, notes }`
+ *
+ * @example
+ * const food = maybeFetch()
+ * throwIfUndefined(food, 'db.food.getById', 'Food not found', {
+ *   code: 'RECORD_NOT_FOUND', context: { id }
+ * })
+ * // food is now typed as Food (not Food | undefined)
  */
 export function throwIfUndefined<T>(
   value: T,
@@ -216,12 +317,34 @@ export const createThrowIfUndefined = <E extends Error>(
 // Curried variants designed for use in `.catch()` and pipeline chains.
 
 /**
- * Curried `rethrowFerr` for `.catch()` chains.
+ * Curried `rethrowFerr` for `.catch()` and pipeline chains.
+ *
+ * Accepts two calling styles:
+ * - **Short form:** `pRethrowFerr({ op, message, code, clientMsg, context, notes, cause })`
+ * - **Full form:** `pRethrowFerr({ with: { op, ... }, notes, mode })`
+ *
+ * Returns `(caught: unknown) => never` — plug directly into `.catch()`.
+ *
+ * @param options - Either `Partial<FErrOptions>` (short) or `RethrowFerrRequest` (full)
  *
  * @example
+ * // Short form — just the fields to merge
  * getDb().getAllFoods()
  *   .then(sendOk(res))
- *   .catch(pRethrowFerr({ op: 'api.foods.list', code: 'REQUEST_FAILED', message: 'Failed to list foods' }))
+ *   .catch(pRethrowFerr({
+ *     op: 'api.foods.list',
+ *     code: 'REQUEST_FAILED',
+ *     message: 'Failed to list foods',
+ *   }))
+ *
+ * @example
+ * // Full form — with mode and top-level notes
+ * fetchExternal()
+ *   .catch(pRethrowFerr({
+ *     with: { op: 'api.proxy', code: 'UPSTREAM_ERROR' },
+ *     notes: 'external service timeout',
+ *     mode: 'append',
+ *   }))
  */
 export const pRethrowFerr = (options: RethrowFerrRequest | Partial<FErrOptions>) =>
   (caught: unknown): never =>
